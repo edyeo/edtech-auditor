@@ -1,0 +1,59 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: edtech
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: edtech
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      # Loopback only: lets the host run the pytest suite (it creates and drops its own database).
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U edtech -d edtech"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  # One-shot: applies api/db/migrations/*.sql before the API starts.
+  migrate:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    command: ["python", "-m", "api.db.migrate"]
+    environment:
+      DATABASE_URL: postgresql://edtech:${POSTGRES_PASSWORD}@db:5432/edtech
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    environment:
+      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-}
+      DATABASE_URL: postgresql://edtech:${POSTGRES_PASSWORD}@db:5432/edtech
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: frontend
+    environment:
+      API_PROXY_TARGET: http://api:8000
+    ports:
+      - "5173:5173"
+    depends_on:
+      - api
+
+volumes:
+  pgdata:

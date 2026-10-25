@@ -28,14 +28,12 @@ export async function checkAnswer(
   return parseJsonOrThrow(response)
 }
 
-export async function explainAnswer(
-  questionId: string,
-  selectedIndex: number,
-): Promise<ExplainResponse> {
+/** Question-level explanation; the server generates it once and serves the stored text afterwards. */
+export async function explainAnswer(questionId: string): Promise<ExplainResponse> {
   const response = await fetch('/api/explain', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ question_id: questionId, selected_index: selectedIndex }),
+    body: JSON.stringify({ question_id: questionId }),
   })
   return parseJsonOrThrow(response)
 }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { explainAnswer } from '@/lib/questions.api'
 import { saveReviewState, submitAttempt } from '@/lib/learner-actions'
 import { useQuestionBank } from '@/lib/use-question-bank'
@@ -71,6 +71,26 @@ export function useExamSession(scopeIds?: string[]) {
   )
 
   const currentQuestion = queue[queueIndex] ?? null
+  // Lets an in-flight explanation request notice that the learner already moved on.
+  const currentQuestionIdRef = useRef<string | null>(null)
+  useEffect(() => {
+    currentQuestionIdRef.current = currentQuestion?.id ?? null
+  }, [currentQuestion?.id])
+
+  const loadExplanation = useCallback(async (questionId: string) => {
+    setIsExplaining(true)
+    setExplanationError(null)
+    try {
+      const result = await explainAnswer(questionId)
+      if (currentQuestionIdRef.current === questionId) setExplanation(result.explanation)
+    } catch {
+      if (currentQuestionIdRef.current === questionId) {
+        setExplanationError('해설을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.')
+      }
+    } finally {
+      if (currentQuestionIdRef.current === questionId) setIsExplaining(false)
+    }
+  }, [])
 
   const resetAttemptState = useCallback(() => {
     setSelectedIndex(null)
@@ -82,6 +102,7 @@ export function useExamSession(scopeIds?: string[]) {
     setOverconfidentMiss(false)
     setNextReviewDays(null)
     setExplanation(null)
+    setIsExplaining(false)
     setExplanationError(null)
     setSubmitError(null)
   }, [])
@@ -127,21 +148,13 @@ export function useExamSession(scopeIds?: string[]) {
       next.boxLevel === 0 ? 0 : Math.round((Date.parse(next.dueAt) - Date.now()) / 86_400_000),
     )
     void saveReviewState(currentQuestion.id, next)
-  }, [currentQuestion, selectedIndex, confidence, reviewState])
+    // A wrong answer fetches the explanation right away; the server reuses the stored one.
+    if (!result.is_correct) void loadExplanation(currentQuestion.id)
+  }, [currentQuestion, selectedIndex, confidence, reviewState, loadExplanation])
 
   const requestExplanation = useCallback(async () => {
-    if (!currentQuestion || selectedIndex === null) return
-    setIsExplaining(true)
-    setExplanationError(null)
-    try {
-      const result = await explainAnswer(currentQuestion.id, selectedIndex)
-      setExplanation(result.explanation)
-    } catch {
-      setExplanationError('해설을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.')
-    } finally {
-      setIsExplaining(false)
-    }
-  }, [currentQuestion, selectedIndex])
+    if (currentQuestion) await loadExplanation(currentQuestion.id)
+  }, [currentQuestion, loadExplanation])
 
   const goToNextQuestion = useCallback(() => {
     setQueueIndex((index) => Math.min(index + 1, queue.length - 1))

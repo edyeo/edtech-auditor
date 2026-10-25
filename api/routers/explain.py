@@ -1,7 +1,7 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.db.session import get_optional_session
@@ -14,7 +14,6 @@ _service = ExplainService()
 
 class ExplainRequest(BaseModel):
     question_id: str
-    selected_index: int = Field(ge=0)
 
 
 class ExplainResponse(BaseModel):
@@ -27,9 +26,7 @@ async def explain(
     payload: ExplainRequest, session: Annotated[AsyncSession | None, Depends(get_optional_session)]
 ) -> ExplainResponse:
     try:
-        explanation = await _service.explain(
-            session, question_id=payload.question_id, selected_index=payload.selected_index
-        )
+        explanation = await _service.explain(session, question_id=payload.question_id)
     except QuestionNotFoundError as exc:
         raise HTTPException(status_code=404, detail="question not found") from exc
     return ExplainResponse(question_id=payload.question_id, explanation=explanation)

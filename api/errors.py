@@ -20,3 +20,7 @@ class DatabaseNotConfiguredError(Exception):
 
 class InvalidLearnerError(Exception):
     """Raised when the X-Learner-Id header is missing or not a UUID."""
+
+
+class ExplanationUnavailableError(Exception):
+    """Raised when the LLM provider fails or returns nothing, so no explanation could be produced."""

@@ -78,3 +78,13 @@ mini_test_items = Table(
     Column("correct_indexes", ARRAY(SmallInteger), nullable=False),
     Column("is_correct", Boolean, nullable=False),
 )
+
+question_explanations = Table(
+    "question_explanations",
+    metadata,
+    Column("question_id", Text, primary_key=True),
+    Column("content_hash", Text, primary_key=True),
+    Column("explanation", Text, nullable=False),
+    Column("provider", Text, nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+)

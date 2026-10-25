@@ -1,0 +1,25 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# Env
+.env
+.env.local
+
+# Vercel
+.vercel/
+
+# OMA local overrides (per-user, not shared)
+.agents/oma-config.local.yaml
+.agents/oma-config.local.cue
+.agents/state/
+
+# Tooling caches
+.pytest_cache/
+.DS_Store
+.agents/backup/

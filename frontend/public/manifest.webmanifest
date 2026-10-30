@@ -1,0 +1,23 @@
+{
+  "id": "/",
+  "name": "정보시스템 감리사 기출문제 학습",
+  "short_name": "감리사 기출",
+  "description": "정보시스템 감리사 기출문제 풀이, 오답노트, 미니 테스트",
+  "lang": "ko",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "categories": ["education"],
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "문제 목록", "url": "/#/questions" },
+    { "name": "오답노트", "url": "/#/wrong-notes" },
+    { "name": "미니 테스트", "url": "/#/mini-test" }
+  ]
+}

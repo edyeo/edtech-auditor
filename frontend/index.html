@@ -1,10 +1,21 @@
 <!doctype html>
-<html lang="en">
+<html lang="ko">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <!-- use-credentials: the manifest is fetched without cookies by default, which fails behind Vercel Deployment Protection. -->
+    <link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>frontend</title>
+    <meta name="theme-color" content="#ffffff" />
+    <meta name="description" content="정보시스템 감리사 기출문제 풀이, 오답노트, 미니 테스트" />
+    <!-- Question text is full of numbers (e.g. 2021-22, 1,200); stop iOS from turning them into phone links. -->
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="감리사 기출" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <title>정보시스템 감리사 기출문제 학습</title>
   </head>
   <body>
     <div id="root"></div>

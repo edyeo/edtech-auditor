@@ -1,6 +1,7 @@
 import { AdminPage } from '@/features/admin'
 import { ExamSession } from '@/features/exam'
 import { MiniTestPage } from '@/features/mini-test'
+import { OxQuizPage } from '@/features/ox-quiz'
 import type { MiniTestScope } from '@/features/mini-test/utils/build-mini-test'
 import { QuestionListPage } from '@/features/question-list'
 import { WrongNotesPage } from '@/features/wrong-notes'
@@ -19,6 +20,7 @@ const NAV_ITEMS = [
   { href: '#/questions', path: '/questions', label: '문제 목록' },
   { href: '#/marked', path: '/marked', label: '마킹한 문항' },
   { href: '#/mini-test', path: '/mini-test', label: '미니 테스트' },
+  { href: '#/ox', path: '/ox', label: 'O/X 퀴즈' },
   { href: '#/wrong-notes', path: '/wrong-notes', label: '오답노트' },
   { href: '#/admin', path: '/admin', label: '관리' },
 ]
@@ -42,6 +44,8 @@ function renderPage(path: string, query: URLSearchParams) {
       const scope = query.get('scope') as MiniTestScope | null
       return <MiniTestPage key={scope ?? 'all'} initialScope={scope && MINI_TEST_SCOPES.includes(scope) ? scope : 'all'} />
     }
+    case '/ox':
+      return <OxQuizPage />
     case '/wrong-notes':
       return <WrongNotesPage />
     case '/admin':

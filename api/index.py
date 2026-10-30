@@ -16,7 +16,7 @@ from api.errors import (
     InvalidLearnerError,
     QuestionNotFoundError,
 )
-from api.routers import admin, explain, learner, questions
+from api.routers import admin, explain, learner, ox, questions
 
 QUESTION_IMAGES_DIR = Path(__file__).resolve().parent / "data" / "images"
 
@@ -33,6 +33,7 @@ app.include_router(questions.router)
 app.include_router(explain.router)
 app.include_router(admin.router)
 app.include_router(learner.router)
+app.include_router(ox.router)
 
 # Domain errors map to HTTP here so services only raise domain exceptions.
 _DOMAIN_ERRORS: dict[type[Exception], tuple[int, str]] = {

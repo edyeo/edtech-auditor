@@ -138,16 +138,21 @@ export function ExamSession({ scopeIds }: ExamSessionProps = {}) {
           </CardContent>
           <CardFooter className="flex justify-end gap-2">
             {!isChecked && (
-              <Button onClick={submitAnswer} disabled={!canSubmit}>
+              <Button className="h-11 flex-1 md:h-8 md:flex-none" onClick={submitAnswer} disabled={!canSubmit}>
                 채점하기
               </Button>
             )}
             {isChecked && (
               <>
-                <Button variant="outline" onClick={requestExplanation} disabled={isExplaining}>
+                <Button
+                  variant="outline"
+                  className="h-11 flex-1 md:h-8 md:flex-none"
+                  onClick={requestExplanation}
+                  disabled={isExplaining}
+                >
                   설명
                 </Button>
-                <Button onClick={goToNextQuestion} disabled={!hasNextQuestion}>
+                <Button className="h-11 flex-1 md:h-8 md:flex-none" onClick={goToNextQuestion} disabled={!hasNextQuestion}>
                   다음 문제
                 </Button>
               </>

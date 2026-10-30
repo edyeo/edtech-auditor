@@ -8,5 +8,5 @@ export function QuestionStem({ stem, imageUrl }: QuestionStemProps) {
     return <img src={imageUrl} alt={stem} className="w-full rounded-md border bg-white" />
   }
 
-  return <p className="text-sm leading-relaxed whitespace-pre-wrap">{stem}</p>
+  return <p className="text-base leading-relaxed whitespace-pre-wrap md:text-sm">{stem}</p>
 }

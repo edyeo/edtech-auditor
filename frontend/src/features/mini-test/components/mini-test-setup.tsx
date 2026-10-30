@@ -54,7 +54,7 @@ export function MiniTestSetup({ questions, markedIds, stats, initialScope, onSta
         <fieldset className="flex flex-col gap-2">
           <legend className="mb-1 text-sm font-medium">출제 범위</legend>
           {(Object.keys(SCOPE_LABELS) as MiniTestScope[]).map((scope) => (
-            <label key={scope} className="flex items-center gap-2 text-sm">
+            <label key={scope} className="flex min-h-10 items-center gap-2 text-sm md:min-h-0">
               <input type="radio" name="mini-test-scope" checked={config.scope === scope} onChange={() => update({ scope })} />
               {SCOPE_LABELS[scope]} ({scopeCounts[scope]})
             </label>
@@ -101,7 +101,7 @@ export function MiniTestSetup({ questions, markedIds, stats, initialScope, onSta
           </p>
         )}
 
-        <Button disabled={pool.length === 0} onClick={() => onStart(config, pool)}>
+        <Button className="h-11 md:h-8" disabled={pool.length === 0} onClick={() => onStart(config, pool)}>
           테스트 시작
         </Button>
       </CardContent>

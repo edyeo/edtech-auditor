@@ -43,7 +43,7 @@ export function QuestionListPage({ markedOnly = false }: QuestionListPageProps) 
 
   return (
     <Card className="w-full max-w-3xl">
-      <CardHeader className="flex flex-row items-center justify-between gap-2">
+      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
         <CardTitle>
           {markedOnly ? '마킹한 문항' : '문제 목록'} ({visible.length})
         </CardTitle>
@@ -86,7 +86,7 @@ export function QuestionListPage({ markedOnly = false }: QuestionListPageProps) 
         </div>
         <div className="flex flex-wrap gap-4 text-sm">
           {!markedOnly && (
-            <label className="flex items-center gap-1.5">
+            <label className="flex min-h-10 items-center gap-1.5 md:min-h-0">
               <input
                 type="checkbox"
                 checked={filter.markedOnly}
@@ -95,7 +95,7 @@ export function QuestionListPage({ markedOnly = false }: QuestionListPageProps) 
               마킹만
             </label>
           )}
-          <label className="flex items-center gap-1.5">
+          <label className="flex min-h-10 items-center gap-1.5 md:min-h-0">
             <input type="checkbox" checked={filter.wrongOnly} onChange={(e) => update({ wrongOnly: e.target.checked })} />
             틀린 적 있는 문제만
           </label>

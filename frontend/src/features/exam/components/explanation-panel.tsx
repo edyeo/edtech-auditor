@@ -12,7 +12,7 @@ export function ExplanationPanel({ isLoading, error, explanation }: ExplanationP
   }
 
   return (
-    <div className="rounded-lg border bg-muted/30 p-4 text-sm">
+    <div className="rounded-lg border bg-muted/30 p-4 text-base md:text-sm">
       <Separator className="mb-3" />
       {isLoading && <p className="text-muted-foreground">해설을 불러오는 중...</p>}
       {error && <p className="text-red-500">{error}</p>}

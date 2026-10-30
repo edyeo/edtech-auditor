@@ -88,7 +88,7 @@ function App() {
   const activePath = path.startsWith('/marked') ? '/marked' : path.startsWith(PRACTICE_PREFIX) ? '/questions' : path
 
   return (
-    <main className="flex min-h-svh flex-col items-center gap-4 bg-background p-6 text-foreground">
+    <main className="flex min-h-svh flex-col items-center gap-4 bg-background p-4 text-foreground md:p-6">
       <h1 className="text-xl font-semibold">정보시스템 감리사 기출문제 학습</h1>
       <nav aria-label="주 메뉴" className="flex flex-wrap justify-center gap-1">
         {NAV_ITEMS.map((item) => (
@@ -97,7 +97,7 @@ function App() {
             href={item.href}
             aria-current={activePath === item.path ? 'page' : undefined}
             className={cn(
-              'rounded-lg px-3 py-1.5 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
+              'rounded-lg px-3 py-2.5 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50 md:py-1.5',
               activePath === item.path ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted',
             )}
           >

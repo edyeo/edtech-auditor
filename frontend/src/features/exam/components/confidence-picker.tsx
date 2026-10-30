@@ -27,7 +27,7 @@ export function ConfidencePicker({ value, disabled, onChange }: ConfidencePicker
             variant={value === option.value ? 'default' : 'outline'}
             disabled={disabled}
             onClick={() => onChange(option.value)}
-            className={cn(value === option.value && 'pointer-events-none')}
+            className={cn('h-11 flex-1 md:h-7 md:flex-none', value === option.value && 'pointer-events-none')}
           >
             {option.label}
           </Button>

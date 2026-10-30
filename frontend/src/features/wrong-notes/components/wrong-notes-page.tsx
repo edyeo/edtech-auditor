@@ -38,7 +38,7 @@ export function WrongNotesPage() {
   return (
     <div className="flex w-full max-w-3xl flex-col gap-4">
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-2">
+        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">
           <CardTitle>오답노트 ({wrongQuestions.length})</CardTitle>
           <Button asChild size="sm" disabled={wrongQuestions.length === 0}>
             <a href="#/mini-test?scope=wrong">오답으로 미니 테스트</a>

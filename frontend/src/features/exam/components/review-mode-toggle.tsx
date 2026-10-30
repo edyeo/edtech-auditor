@@ -15,6 +15,7 @@ export function ReviewModeToggle({ mode, dueCount, totalCount, onChange }: Revie
         type="button"
         size="sm"
         variant={mode === 'due' ? 'default' : 'outline'}
+        className="h-10 md:h-7"
         onClick={() => onChange('due')}
       >
         오늘 복습 ({dueCount})
@@ -23,6 +24,7 @@ export function ReviewModeToggle({ mode, dueCount, totalCount, onChange }: Revie
         type="button"
         size="sm"
         variant={mode === 'all' ? 'default' : 'outline'}
+        className="h-10 md:h-7"
         onClick={() => onChange('all')}
       >
         전체 ({totalCount})

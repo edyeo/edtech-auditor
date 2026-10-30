@@ -40,7 +40,7 @@ export function MiniTestRun({ questions, isSubmitting, error, onSubmit }: MiniTe
               aria-current={i === index ? 'step' : undefined}
               onClick={() => setIndex(i)}
               className={cn(
-                'size-7 rounded-md border text-xs outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
+                'size-10 rounded-md border text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50 md:size-7 md:text-xs',
                 i === index && 'border-primary',
                 item.id in answers ? 'bg-primary text-primary-foreground' : 'bg-background text-muted-foreground',
               )}
@@ -63,18 +63,23 @@ export function MiniTestRun({ questions, isSubmitting, error, onSubmit }: MiniTe
         />
         {error && <p className="text-sm text-red-500">{error}</p>}
       </CardContent>
-      <CardFooter className="flex items-center justify-between gap-2">
+      <CardFooter className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex gap-2">
-          <Button variant="outline" disabled={index === 0} onClick={() => setIndex(index - 1)}>
+          <Button variant="outline" className="h-11 md:h-8" disabled={index === 0} onClick={() => setIndex(index - 1)}>
             이전
           </Button>
-          <Button variant="outline" disabled={index === questions.length - 1} onClick={() => setIndex(index + 1)}>
+          <Button
+            variant="outline"
+            className="h-11 md:h-8"
+            disabled={index === questions.length - 1}
+            onClick={() => setIndex(index + 1)}
+          >
             다음
           </Button>
         </div>
         <div className="flex items-center gap-2">
           {remaining > 0 && <span className="text-xs text-muted-foreground">{remaining}문항 남음</span>}
-          <Button disabled={remaining > 0 || isSubmitting} onClick={() => onSubmit(answers)}>
+          <Button className="h-11 md:h-8" disabled={remaining > 0 || isSubmitting} onClick={() => onSubmit(answers)}>
             {isSubmitting ? '채점 중...' : '제출'}
           </Button>
         </div>

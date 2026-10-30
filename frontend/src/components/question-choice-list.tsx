@@ -30,7 +30,7 @@ export function QuestionChoiceList({
               disabled={isChecked}
               onClick={() => onSelect(index)}
               className={cn(
-                'flex w-full items-start gap-3 rounded-lg border px-4 py-3 text-left text-sm transition-colors',
+                'flex w-full items-start gap-3 rounded-lg border px-4 py-3 text-left text-base transition-colors md:text-sm',
                 'disabled:cursor-default',
                 !isChecked && 'hover:bg-accent/50',
                 !isChecked && isSelected && 'border-primary bg-accent',

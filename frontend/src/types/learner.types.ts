@@ -1,5 +1,10 @@
 export type MarkSource = 'manual' | 'auto'
-export type QuestionMark = { markedAt: string; source: MarkSource }
+export type QuestionMark = {
+  markedAt: string
+  source: MarkSource
+  /** Markers on the question: one per wrong answer, adjustable by hand. */
+  count: number
+}
 export type QuestionMarkMap = Record<string, QuestionMark>
 
 export type QuestionStats = {

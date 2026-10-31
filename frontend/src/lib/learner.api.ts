@@ -30,7 +30,7 @@ async function learnerRequest<T>(path: string, init: RequestInit = {}): Promise<
 
 // ---- wire format (snake_case) <-> app types (camelCase) ---------------------------------------
 
-type WireMark = { marked_at: string; source: 'manual' | 'auto' }
+type WireMark = { marked_at: string; source: 'manual' | 'auto'; count: number }
 type WireStats = { attempts: number; wrong: number; streak: number; last_wrong_at: string | null }
 type WireReview = {
   box_level: number
@@ -47,7 +47,7 @@ type WireMiniTest = {
   items: { question_id: string; selected_index: number; correct_indexes: number[]; is_correct: boolean }[]
 }
 
-const toMark = (m: WireMark): QuestionMark => ({ markedAt: m.marked_at, source: m.source })
+const toMark = (m: WireMark): QuestionMark => ({ markedAt: m.marked_at, source: m.source, count: m.count })
 const toStats = (s: WireStats): QuestionStats => ({
   attempts: s.attempts,
   wrong: s.wrong,
@@ -88,18 +88,21 @@ const mapValues = <A, B>(source: Record<string, A>, fn: (value: A) => B): Record
 
 export async function fetchLearnerState(): Promise<{
   autoMarkStreak: number
+  maxMarkCount: number
   marks: QuestionMarkMap
   stats: QuestionStatsMap
   review: ReviewStateMap
 }> {
   const raw = await learnerRequest<{
     auto_mark_streak: number
+    max_mark_count: number
     marks: Record<string, WireMark>
     stats: Record<string, WireStats>
     review: Record<string, WireReview>
   }>('/state')
   return {
     autoMarkStreak: raw.auto_mark_streak,
+    maxMarkCount: raw.max_mark_count,
     marks: mapValues(raw.marks, toMark),
     stats: mapValues(raw.stats, toStats),
     review: mapValues(raw.review, toReview),
@@ -110,8 +113,11 @@ export async function fetchMiniTests(): Promise<MiniTestRecord[]> {
   return (await learnerRequest<WireMiniTest[]>('/mini-tests')).map(toMiniTest)
 }
 
-export async function putMark(questionId: string): Promise<QuestionMark> {
-  return toMark(await learnerRequest<WireMark>(`/marks/${questionId}`, { method: 'PUT' }))
+/** Set how many markers the question carries (1 and up); removing them all is `deleteMark`. */
+export async function putMark(questionId: string, count: number): Promise<QuestionMark> {
+  return toMark(
+    await learnerRequest<WireMark>(`/marks/${questionId}`, { method: 'PUT', body: JSON.stringify({ count }) }),
+  )
 }
 
 export async function deleteMark(questionId: string): Promise<QuestionStats | null> {

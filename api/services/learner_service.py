@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.models.learner import (
     AttemptRequest,
     AttemptResponse,
+    MAX_MARK_COUNT,
     LearnerState,
     LocalImportRequest,
     MarkOut,
@@ -22,14 +23,15 @@ from api.repositories.question_repository import QuestionRepository
 from api.errors import QuestionNotFoundError
 from api.services.question_service import QuestionService
 
-# A question answered wrong this many times in a row is marked automatically.
+# Wrong answers in a row from which the UI flags a question. Marking does not wait for it: every
+# wrong answer adds a marker.
 AUTO_MARK_STREAK = 2
 
 
 class LearnerService:
     """One learner's marks, attempt stats, review states and mini test history.
 
-    Business rules (auto-marking, streak reset on un-mark) live here, not in SQL triggers.
+    Business rules (a marker per wrong answer, streak reset on un-mark) live here, not in SQL triggers.
     Every write is one transaction: `async with session.begin()` wraps the whole operation.
     """
 
@@ -44,6 +46,7 @@ class LearnerService:
     async def get_state(self, learner_id: UUID) -> LearnerState:
         return LearnerState(
             auto_mark_streak=AUTO_MARK_STREAK,
+            max_mark_count=MAX_MARK_COUNT,
             marks=await self._repo.get_marks(learner_id),
             stats=await self._repo.get_stats(learner_id),
             review=await self._repo.get_review(learner_id),
@@ -54,13 +57,10 @@ class LearnerService:
 
     # ---- marks -------------------------------------------------------------------------------
 
-    async def add_mark(self, learner_id: UUID, question_id: str) -> MarkOut:
+    async def set_mark_count(self, learner_id: UUID, question_id: str, count: int) -> MarkOut:
         self._require_question(question_id)
         async with self._session.begin():
-            created = await self._repo.add_mark(learner_id, question_id, "manual")
-            mark = created or await self._repo.get_mark(learner_id, question_id)
-        assert mark is not None
-        return mark
+            return await self._repo.set_mark_count(learner_id, question_id, count)
 
     async def remove_mark(self, learner_id: UUID, question_id: str) -> MarkRemovedResponse:
         """Un-marking also resets the wrong streak so the question isn't re-marked at once."""
@@ -117,9 +117,7 @@ class LearnerService:
         self, learner_id: UUID, question_id: str, is_correct: bool
     ) -> tuple[StatsOut, MarkOut | None]:
         stats = await self._repo.record_attempt(learner_id, question_id, is_correct)
-        mark = None
-        if not is_correct and stats.streak >= AUTO_MARK_STREAK:
-            mark = await self._repo.add_mark(learner_id, question_id, "auto")  # None if already marked
+        mark = None if is_correct else await self._repo.bump_mark(learner_id, question_id, "auto")
         return stats, mark
 
     # ---- review state ------------------------------------------------------------------------

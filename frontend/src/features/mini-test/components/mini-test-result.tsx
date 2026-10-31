@@ -1,4 +1,4 @@
-import { QuestionMarkButton } from '@/components/question-mark-button'
+import { QuestionMarkerBox } from '@/components/question-marker-box'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
@@ -31,7 +31,7 @@ export function MiniTestResult({ questions, record, autoMarkedIds, onRetry }: Mi
         </p>
         {autoMarkedIds.length > 0 && (
           <p role="status" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-            연속으로 틀린 {autoMarkedIds.length}문항이 자동으로 마킹되었습니다.
+            틀린 {autoMarkedIds.length}문항에 마커를 하나씩 더했습니다.
           </p>
         )}
         <ol className="flex flex-col">
@@ -40,8 +40,7 @@ export function MiniTestResult({ questions, record, autoMarkedIds, onRetry }: Mi
             if (!question) return null
             return (
               <li key={item.questionId} className="flex items-start gap-1 border-b py-2 last:border-b-0">
-                <QuestionMarkButton questionId={question.id} />
-                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <div className="flex min-w-0 flex-1 flex-col gap-0.5 pl-1">
                   <span className="text-xs text-muted-foreground">
                     {i + 1}. {question.year}년 {question.round}회 {question.number}번 · {question.subject}
                   </span>
@@ -54,7 +53,10 @@ export function MiniTestResult({ questions, record, autoMarkedIds, onRetry }: Mi
                     </span>
                   )}
                 </div>
-                <Badge variant={item.isCorrect ? 'secondary' : 'destructive'}>{item.isCorrect ? '정답' : '오답'}</Badge>
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  <QuestionMarkerBox questionId={question.id} />
+                  <Badge variant={item.isCorrect ? 'secondary' : 'destructive'}>{item.isCorrect ? '정답' : '오답'}</Badge>
+                </div>
               </li>
             )
           })}

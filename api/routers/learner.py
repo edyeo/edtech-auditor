@@ -18,6 +18,7 @@ from api.models.learner import (
     MiniTestSubmitRequest,
     MiniTestSubmitResponse,
     ReviewState,
+    SetMarkRequest,
 )
 from api.services.learner_service import LearnerService
 
@@ -51,8 +52,11 @@ async def list_mini_tests(learner_id: LearnerId, service: Service) -> list[MiniT
 
 
 @router.put("/marks/{question_id}", response_model=MarkOut)
-async def add_mark(question_id: str, learner_id: LearnerId, service: Service) -> MarkOut:
-    return await service.add_mark(learner_id, question_id)
+async def set_mark(
+    question_id: str, payload: SetMarkRequest, learner_id: LearnerId, service: Service
+) -> MarkOut:
+    """Set how many markers the question carries (1-5); DELETE removes them all."""
+    return await service.set_mark_count(learner_id, question_id, payload.count)
 
 
 @router.delete("/marks/{question_id}", response_model=MarkRemovedResponse)

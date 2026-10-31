@@ -5,6 +5,9 @@ import type { ConfidenceLevel, ReviewState } from '@/types/learner.types'
 const INTERVAL_DAYS = [0, 1, 3, 7, 14, 30] as const
 const MAX_BOX = INTERVAL_DAYS.length - 1
 
+// A review state still stores a confidence level, but learners are no longer asked for one.
+const NEUTRAL_CONFIDENCE: ConfidenceLevel = 'medium'
+
 function addDaysAsIsoDate(date: Date, days: number): string {
   const next = new Date(date)
   next.setDate(next.getDate() + days)
@@ -14,39 +17,24 @@ function addDaysAsIsoDate(date: Date, days: number): string {
 /**
  * Decide the next review box/date for a question after one attempt.
  *
- * - Wrong answer: reset to box 0 (due immediately) regardless of confidence.
- * - Correct + high confidence: skip ahead two boxes — genuinely secure knowledge
- *   needs less frequent review.
- * - Correct + low/medium confidence: advance one box — it stuck, but a lucky
- *   guess or shaky recall still needs a closer follow-up.
- * - Wrong + high confidence is flagged as an "overconfident miss" so the UI can
- *   call it out — these are the items most likely to feel known but aren't.
+ * - Wrong answer: reset to box 0 (due immediately).
+ * - Correct answer: advance one box.
  */
 export function computeNextReview(
   previous: ReviewState | undefined,
   isCorrect: boolean,
-  confidence: ConfidenceLevel,
   now = new Date(),
 ): ReviewState {
   const previousBox = previous?.boxLevel ?? 0
-  const overconfidentMiss = !isCorrect && confidence === 'high'
-
-  let nextBox: number
-  if (!isCorrect) {
-    nextBox = 0
-  } else if (confidence === 'high') {
-    nextBox = Math.min(previousBox + 2, MAX_BOX)
-  } else {
-    nextBox = Math.min(previousBox + 1, MAX_BOX)
-  }
+  const nextBox = isCorrect ? Math.min(previousBox + 1, MAX_BOX) : 0
 
   return {
     boxLevel: nextBox,
     dueAt: addDaysAsIsoDate(now, INTERVAL_DAYS[nextBox]),
-    lastConfidence: confidence,
+    lastConfidence: NEUTRAL_CONFIDENCE,
     lastCorrect: isCorrect,
     attempts: (previous?.attempts ?? 0) + 1,
-    overconfidentMiss,
+    overconfidentMiss: false,
   }
 }
 

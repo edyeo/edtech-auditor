@@ -9,7 +9,12 @@ import {
   putReview,
 } from '@/lib/learner.api'
 import { learnerStore } from '@/lib/learner-state.store'
-import type { MiniTestRecord, ReviewState } from '@/types/learner.types'
+import type {
+  MiniTestRecord,
+  QuestionMark,
+  QuestionMarkMap,
+  ReviewState,
+} from '@/types/learner.types'
 import type { AnswerCheckResponse } from '@/types/question.types'
 
 function notify(message: string): void {
@@ -46,37 +51,71 @@ async function loadLearnerState(): Promise<void> {
   }
 }
 
-/** Star button. Optimistic: the UI flips at once and rolls back if the server refuses. */
-export async function toggleQuestionMark(questionId: string): Promise<void> {
+// Marker edits are sent as "set the count to N". Taps are coalesced per question: while a request is
+// in flight only the latest wanted count is remembered and sent next, so quick taps cannot land out of
+// order and an older response never overwrites a newer tap.
+const wantedMarkCounts = new Map<string, number>()
+const flushingMarks = new Set<string>()
+
+/** Marker box +/- buttons. Optimistic: the UI changes at once and rolls back if the server refuses. */
+export function setQuestionMarkCount(questionId: string, count: number): void {
   const before = learnerStore.getSnapshot()
-  const wasMarked = questionId in before.marks
+  const next = Math.min(Math.max(count, 0), before.maxMarkCount)
+  const current = before.marks[questionId]?.count ?? 0
+  if (next === current && !flushingMarks.has(questionId)) return
 
-  if (wasMarked) {
-    const { [questionId]: _removed, ...rest } = before.marks
-    const stats = before.stats[questionId]
-    learnerStore.update((s) => ({
-      ...s,
-      marks: rest,
-      stats: stats ? { ...s.stats, [questionId]: { ...stats, streak: 0 } } : s.stats,
-    }))
-  } else {
-    learnerStore.update((s) => ({
-      ...s,
-      marks: { ...s.marks, [questionId]: { markedAt: new Date().toISOString(), source: 'manual' } },
-    }))
+  wantedMarkCounts.set(questionId, next)
+  learnerStore.update((s) => ({ ...s, marks: withMarkCount(s.marks, questionId, next) }))
+  void flushMarkCount(questionId, before.marks[questionId])
+}
+
+function withMarkCount(marks: QuestionMarkMap, questionId: string, count: number): QuestionMarkMap {
+  if (count === 0) {
+    const { [questionId]: _removed, ...rest } = marks
+    return rest
   }
+  const existing = marks[questionId]
+  return {
+    ...marks,
+    [questionId]: existing
+      ? { ...existing, count }
+      : { markedAt: new Date().toISOString(), source: 'manual', count },
+  }
+}
 
+async function flushMarkCount(questionId: string, confirmedMark: QuestionMark | undefined): Promise<void> {
+  if (flushingMarks.has(questionId)) return
+  flushingMarks.add(questionId)
+  let confirmed = confirmedMark
   try {
-    if (wasMarked) {
-      const stats = await deleteMark(questionId)
-      if (stats) learnerStore.update((s) => ({ ...s, stats: { ...s.stats, [questionId]: stats } }))
-    } else {
-      const mark = await putMark(questionId)
+    for (;;) {
+      const wanted = wantedMarkCounts.get(questionId) ?? 0
+      if (wanted === 0) {
+        if (confirmed) {
+          const stats = await deleteMark(questionId)
+          if (stats) learnerStore.update((s) => ({ ...s, stats: { ...s.stats, [questionId]: stats } }))
+        }
+        confirmed = undefined
+      } else if (wanted !== confirmed?.count) {
+        confirmed = await putMark(questionId, wanted)
+      }
+      if ((wantedMarkCounts.get(questionId) ?? 0) === wanted) break
+    }
+    if (confirmed) {
+      const mark = confirmed
       learnerStore.update((s) => ({ ...s, marks: { ...s.marks, [questionId]: mark } }))
     }
   } catch {
-    learnerStore.update((s) => ({ ...s, marks: before.marks, stats: before.stats }))
-    notify('마킹을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.')
+    learnerStore.update((s) => ({
+      ...s,
+      marks: confirmed
+        ? { ...s.marks, [questionId]: confirmed }
+        : withMarkCount(s.marks, questionId, 0),
+    }))
+    notify('마커를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.')
+  } finally {
+    wantedMarkCounts.delete(questionId)
+    flushingMarks.delete(questionId)
   }
 }
 

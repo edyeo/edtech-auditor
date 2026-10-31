@@ -6,7 +6,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.db.tables import mini_test_items, mini_test_records, question_marks, question_stats, review_states
-from api.models.learner import MarkOut, MiniTestItem, MiniTestRecord, ReviewState, StatsOut
+from api.models.learner import MAX_MARK_COUNT, MarkOut, MiniTestItem, MiniTestRecord, ReviewState, StatsOut
 
 MAX_MINI_TEST_RECORDS = 100
 
@@ -24,10 +24,16 @@ class LearnerRepository:
 
     async def get_marks(self, learner_id: UUID) -> dict[str, MarkOut]:
         rows = await self._session.execute(
-            select(question_marks.c.question_id, question_marks.c.marked_at, question_marks.c.source)
-            .where(question_marks.c.learner_id == learner_id)
+            select(
+                question_marks.c.question_id,
+                question_marks.c.marked_at,
+                question_marks.c.source,
+                question_marks.c.mark_count,
+            ).where(question_marks.c.learner_id == learner_id)
         )
-        return {r.question_id: MarkOut(marked_at=r.marked_at, source=r.source) for r in rows}
+        return {
+            r.question_id: MarkOut(marked_at=r.marked_at, source=r.source, count=r.mark_count) for r in rows
+        }
 
     async def get_stats(self, learner_id: UUID) -> dict[str, StatsOut]:
         rows = await self._session.execute(
@@ -104,32 +110,51 @@ class LearnerRepository:
 
     async def add_mark(
         self, learner_id: UUID, question_id: str, source: str, marked_at: datetime | None = None
-    ) -> MarkOut | None:
-        """Insert a mark; returns it only when it was newly created (idempotent otherwise)."""
-        row = (
-            await self._session.execute(
-                insert(question_marks)
-                .values(
-                    learner_id=learner_id,
-                    question_id=question_id,
-                    source=source,
-                    marked_at=marked_at or datetime.now(UTC),
-                )
-                .on_conflict_do_nothing(index_elements=[question_marks.c.learner_id, question_marks.c.question_id])
-                .returning(question_marks.c.marked_at, question_marks.c.source)
+    ) -> None:
+        """Insert a single-marker mark if the question has none yet (used by the local-data import)."""
+        await self._session.execute(
+            insert(question_marks)
+            .values(
+                learner_id=learner_id,
+                question_id=question_id,
+                source=source,
+                marked_at=marked_at or datetime.now(UTC),
+                mark_count=1,
             )
-        ).first()
-        return MarkOut(marked_at=row.marked_at, source=row.source) if row else None
+            .on_conflict_do_nothing(index_elements=[question_marks.c.learner_id, question_marks.c.question_id])
+        )
 
-    async def get_mark(self, learner_id: UUID, question_id: str) -> MarkOut | None:
-        row = (
-            await self._session.execute(
-                select(question_marks.c.marked_at, question_marks.c.source).where(
-                    question_marks.c.learner_id == learner_id, question_marks.c.question_id == question_id
-                )
-            )
-        ).first()
-        return MarkOut(marked_at=row.marked_at, source=row.source) if row else None
+    async def bump_mark(self, learner_id: UUID, question_id: str, source: str) -> MarkOut:
+        """Add one marker (capped) in ONE statement, so concurrent wrong answers can't lose an increment."""
+        stmt = insert(question_marks).values(
+            learner_id=learner_id,
+            question_id=question_id,
+            source=source,
+            marked_at=datetime.now(UTC),
+            mark_count=1,
+        )
+        stmt = stmt.on_conflict_do_update(
+            index_elements=[question_marks.c.learner_id, question_marks.c.question_id],
+            set_={"mark_count": func.least(question_marks.c.mark_count + 1, MAX_MARK_COUNT)},
+        ).returning(question_marks.c.marked_at, question_marks.c.source, question_marks.c.mark_count)
+        row = (await self._session.execute(stmt)).one()
+        return MarkOut(marked_at=row.marked_at, source=row.source, count=row.mark_count)
+
+    async def set_mark_count(self, learner_id: UUID, question_id: str, count: int) -> MarkOut:
+        """Set the marker count by hand; an existing mark keeps its original source and date."""
+        stmt = insert(question_marks).values(
+            learner_id=learner_id,
+            question_id=question_id,
+            source="manual",
+            marked_at=datetime.now(UTC),
+            mark_count=count,
+        )
+        stmt = stmt.on_conflict_do_update(
+            index_elements=[question_marks.c.learner_id, question_marks.c.question_id],
+            set_={"mark_count": count},
+        ).returning(question_marks.c.marked_at, question_marks.c.source, question_marks.c.mark_count)
+        row = (await self._session.execute(stmt)).one()
+        return MarkOut(marked_at=row.marked_at, source=row.source, count=row.mark_count)
 
     async def remove_mark(self, learner_id: UUID, question_id: str) -> None:
         await self._session.execute(

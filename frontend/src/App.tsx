@@ -1,5 +1,5 @@
 import { AdminPage } from '@/features/admin'
-import { ExamSession } from '@/features/exam'
+import { StudyListPage } from '@/features/exam'
 import { MiniTestPage } from '@/features/mini-test'
 import { OxQuizPage } from '@/features/ox-quiz'
 import type { MiniTestScope } from '@/features/mini-test/utils/build-mini-test'
@@ -51,7 +51,7 @@ function renderPage(path: string, query: URLSearchParams) {
     case '/admin':
       return <AdminPage />
     default:
-      return <ExamSession />
+      return <StudyListPage />
   }
 }
 

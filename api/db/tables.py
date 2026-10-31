@@ -32,6 +32,7 @@ question_marks = Table(
     Column("question_id", Text, primary_key=True),
     Column("source", Text, nullable=False),
     Column("marked_at", DateTime(timezone=True), nullable=False),
+    Column("mark_count", SmallInteger, nullable=False),
 )
 
 question_stats = Table(

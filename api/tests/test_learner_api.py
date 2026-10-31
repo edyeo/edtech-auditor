@@ -18,16 +18,28 @@ async def test_learner_id_is_required(client):
     assert (await client.get("/api/learner/state", headers={"X-Learner-Id": "nope"})).status_code == 400
 
 
-async def test_two_wrong_answers_in_a_row_auto_mark(client, learner):
+async def test_every_wrong_answer_adds_a_marker(client, learner):
     first = await attempt(client, learner, Q1, 0)
-    assert first["stats"]["streak"] == 1 and first["auto_marked"] is False
+    assert first["stats"]["streak"] == 1
+    assert first["auto_marked"] is True and first["mark"]["source"] == "auto" and first["mark"]["count"] == 1
 
     second = await attempt(client, learner, Q1, 2)
-    assert second["stats"]["streak"] == 2
-    assert second["auto_marked"] is True and second["mark"]["source"] == "auto"
+    assert second["mark"]["count"] == 2 and second["mark"]["marked_at"] == first["mark"]["marked_at"]
 
-    third = await attempt(client, learner, Q1, 3)  # already marked: no second auto-mark
-    assert third["auto_marked"] is False
+    state = (await client.get("/api/learner/state", headers=learner)).json()
+    assert state["marks"][Q1]["count"] == 2 and state["max_mark_count"] == 5
+
+
+async def test_markers_stop_at_the_maximum(client, learner):
+    for _ in range(7):
+        result = await attempt(client, learner, Q1, 0)
+    assert result["mark"]["count"] == 5
+
+
+async def test_correct_answer_adds_no_marker(client, learner):
+    result = await attempt(client, learner, Q1, 1)
+    assert result["check"]["is_correct"] is True and result["mark"] is None and result["auto_marked"] is False
+    assert (await client.get("/api/learner/state", headers=learner)).json()["marks"] == {}
 
 
 async def test_correct_answer_resets_the_streak(client, learner):
@@ -35,23 +47,48 @@ async def test_correct_answer_resets_the_streak(client, learner):
     ok = await attempt(client, learner, Q1, 1)
     assert ok["check"]["is_correct"] is True and ok["stats"]["streak"] == 0
     again = await attempt(client, learner, Q1, 0)
-    assert again["stats"]["streak"] == 1 and again["auto_marked"] is False
+    assert again["stats"]["streak"] == 1
+    assert again["mark"]["count"] == 2  # the earlier wrong answer's marker stays
 
 
-async def test_unmarking_resets_the_streak_so_it_is_not_remarked_at_once(client, learner):
+async def test_removing_the_markers_resets_the_streak_and_starts_over(client, learner):
     await attempt(client, learner, Q1, 0)
-    await attempt(client, learner, Q1, 0)  # auto-marked, streak 2
+    await attempt(client, learner, Q1, 0)  # two markers, streak 2
     removed = await client.delete(f"/api/learner/marks/{Q1}", headers=learner)
     assert removed.json()["stats"]["streak"] == 0
+    assert (await client.get("/api/learner/state", headers=learner)).json()["marks"] == {}
     after = await attempt(client, learner, Q1, 0)
-    assert after["stats"]["streak"] == 1 and after["auto_marked"] is False
+    assert after["stats"]["streak"] == 1 and after["mark"]["count"] == 1
 
 
-async def test_manual_mark_is_idempotent(client, learner):
-    a = await client.put(f"/api/learner/marks/{Q2}", headers=learner)
-    b = await client.put(f"/api/learner/marks/{Q2}", headers=learner)
-    assert a.json() == b.json() and a.json()["source"] == "manual"
-    assert (await client.put("/api/learner/marks/nope", headers=learner)).status_code == 404
+async def put_mark(client, learner, question_id, count):
+    return await client.put(f"/api/learner/marks/{question_id}", headers=learner, json={"count": count})
+
+
+async def test_manual_marker_count_is_set_not_added(client, learner):
+    a = await put_mark(client, learner, Q2, 3)
+    b = await put_mark(client, learner, Q2, 3)
+    assert a.json() == b.json() and a.json()["source"] == "manual" and a.json()["count"] == 3
+    assert (await put_mark(client, learner, Q2, 1)).json()["count"] == 1  # lowering works too
+    assert (await put_mark(client, learner, "nope", 1)).status_code == 404
+
+
+async def test_manual_marker_count_must_be_within_range(client, learner):
+    for bad in (0, 6, -1):
+        assert (await put_mark(client, learner, Q2, bad)).status_code == 422
+    assert (await client.put(f"/api/learner/marks/{Q2}", headers=learner)).status_code == 422  # body is required
+
+
+async def test_manual_count_keeps_the_original_source_and_a_wrong_answer_adds_to_it(client, learner):
+    await attempt(client, learner, Q1, 0)  # auto-marked, one marker
+    set_by_hand = (await put_mark(client, learner, Q1, 4)).json()
+    assert set_by_hand["source"] == "auto" and set_by_hand["count"] == 4
+    assert (await attempt(client, learner, Q1, 0))["mark"]["count"] == 5
+
+
+async def test_concurrent_wrong_answers_do_not_lose_markers(client, learner):
+    await asyncio.gather(*(attempt(client, learner, Q2, 3) for _ in range(4)))
+    assert (await client.get("/api/learner/state", headers=learner)).json()["marks"][Q2]["count"] == 4
 
 
 async def test_mini_test_grades_records_and_auto_marks(client, learner):
@@ -65,15 +102,16 @@ async def test_mini_test_grades_records_and_auto_marks(client, learner):
     }
     first = (await client.post("/api/learner/mini-tests", headers=learner, json=body)).json()
     assert [i["is_correct"] for i in first["record"]["items"]] == [False, True, True]
-    assert first["auto_marked_ids"] == []
+    assert first["auto_marked_ids"] == [Q1] and first["marks"][Q1]["count"] == 1
 
     second = (await client.post("/api/learner/mini-tests", headers=learner, json=body)).json()
-    assert second["auto_marked_ids"] == [Q1]  # wrong twice in a row
+    assert second["auto_marked_ids"] == [Q1] and second["marks"][Q1]["count"] == 2
 
     history = (await client.get("/api/learner/mini-tests", headers=learner)).json()
     assert len(history) == 2 and history[0]["id"] == second["record"]["id"]
     state = (await client.get("/api/learner/state", headers=learner)).json()
     assert state["stats"][Q1]["attempts"] == 2 and state["marks"][Q1]["source"] == "auto"
+    assert state["marks"][Q1]["count"] == 2
 
 
 async def test_concurrent_attempts_do_not_lose_updates(client, learner):
@@ -100,6 +138,7 @@ async def test_import_fills_only_an_empty_profile_and_clamps_bad_data(client, le
     assert (await client.post("/api/learner/import", headers=learner, json=LEGACY)).json() == {"imported": True}
     state = (await client.get("/api/learner/state", headers=learner)).json()
     assert list(state["marks"]) == ["2021-22-09"]  # unknown question skipped
+    assert state["marks"]["2021-22-09"]["count"] == 1
     assert state["stats"]["2021-22-09"] == {"attempts": 2, "wrong": 2, "streak": 2, "last_wrong_at": None}
     assert (await client.post("/api/learner/import", headers=learner, json=LEGACY)).json() == {"imported": False}
 

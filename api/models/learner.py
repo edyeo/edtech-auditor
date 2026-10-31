@@ -8,10 +8,20 @@ from api.models.question import AnswerCheckResponse
 MarkSource = Literal["manual", "auto"]
 Confidence = Literal["low", "medium", "high"]
 
+MAX_MARK_COUNT = 5
+"""Most markers one question can carry; also the CHECK on question_marks.mark_count."""
+
 
 class MarkOut(BaseModel):
     marked_at: datetime
     source: MarkSource
+    """How the question first got marked; later markers (either kind) keep it."""
+    count: int = Field(ge=1, le=MAX_MARK_COUNT)
+    """Markers on the question: +1 per wrong answer, adjustable by hand."""
+
+
+class SetMarkRequest(BaseModel):
+    count: int = Field(ge=1, le=MAX_MARK_COUNT)
 
 
 class StatsOut(BaseModel):
@@ -48,6 +58,8 @@ class MiniTestRecord(BaseModel):
 
 class LearnerState(BaseModel):
     auto_mark_streak: int
+    """Wrong streak from which the UI flags a question; marking itself happens on every wrong answer."""
+    max_mark_count: int
     marks: dict[str, MarkOut]
     stats: dict[str, StatsOut]
     review: dict[str, ReviewState]

@@ -3,15 +3,22 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { QuestionListRow } from '@/components/question-list-row'
+import { QuestionListPager } from '@/components/question-list-pager'
 import { NativeSelect } from '@/components/ui/native-select'
 import {
   DEFAULT_QUESTION_FILTER,
   filterQuestions,
   type QuestionFilter,
 } from '@/features/question-list/utils/filter-questions'
+import { paginateItems } from '@/lib/paginate-items'
+import { listQuestionSections } from '@/lib/question-section'
 import { useQuestionBank } from '@/lib/use-question-bank'
 import { useQuestionMarks } from '@/lib/use-question-marks'
 import { useQuestionStats } from '@/lib/use-question-stats'
+
+// Expanded rows carry the whole stem and choices, so they get fewer rows per page.
+const COLLAPSED_PAGE_SIZE = 50
+const EXPANDED_PAGE_SIZE = 10
 
 type QuestionListPageProps = {
   /** "마킹한 문항" mode: only marked questions, plus a button to practice them. */
@@ -23,9 +30,11 @@ export function QuestionListPage({ markedOnly = false }: QuestionListPageProps) 
   const { marks, markedIds } = useQuestionMarks()
   const stats = useQuestionStats()
   const [filter, setFilter] = useState<QuestionFilter>(DEFAULT_QUESTION_FILTER)
+  const [expanded, setExpanded] = useState(false)
+  const [requestedPage, setRequestedPage] = useState(1)
 
   const years = useMemo(() => [...new Set(questions.map((q) => q.year))].sort((a, b) => b - a), [questions])
-  const subjects = useMemo(() => [...new Set(questions.map((q) => q.subject))], [questions])
+  const sections = useMemo(() => listQuestionSections(questions), [questions])
   const markedSet = useMemo(() => new Set(markedIds), [markedIds])
 
   const visible = useMemo(
@@ -33,8 +42,25 @@ export function QuestionListPage({ markedOnly = false }: QuestionListPageProps) 
     [questions, filter, markedOnly, markedSet, stats],
   )
 
+  const { items: pageItems, page, pageCount } = paginateItems(
+    visible,
+    requestedPage,
+    expanded ? EXPANDED_PAGE_SIZE : COLLAPSED_PAGE_SIZE,
+  )
+
   function update(patch: Partial<QuestionFilter>) {
     setFilter((current) => ({ ...current, ...patch }))
+    setRequestedPage(1)
+  }
+
+  function toggleExpanded() {
+    setExpanded((current) => !current)
+    setRequestedPage(1)
+  }
+
+  function goToPage(next: number) {
+    setRequestedPage(next)
+    window.scrollTo({ top: 0 })
   }
 
   if (error) {
@@ -47,11 +73,22 @@ export function QuestionListPage({ markedOnly = false }: QuestionListPageProps) 
         <CardTitle>
           {markedOnly ? '마킹한 문항' : '문제 목록'} ({visible.length})
         </CardTitle>
-        {markedOnly && (
-          <Button asChild size="sm" disabled={markedIds.length === 0}>
-            <a href="#/marked/practice">마킹 문항 풀기</a>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            aria-pressed={expanded}
+            className="h-10 md:h-8"
+            onClick={toggleExpanded}
+          >
+            {expanded ? '모두 접기' : '모두 펼치기'}
           </Button>
-        )}
+          {markedOnly && (
+            <Button asChild size="sm" disabled={markedIds.length === 0}>
+              <a href="#/marked/practice">마킹 문항 풀기</a>
+            </Button>
+          )}
+        </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-2">
@@ -69,9 +106,9 @@ export function QuestionListPage({ markedOnly = false }: QuestionListPageProps) 
           </NativeSelect>
           <NativeSelect aria-label="과목" value={filter.subject} onChange={(e) => update({ subject: e.target.value })}>
             <option value="all">전체 과목</option>
-            {subjects.map((subject) => (
-              <option key={subject} value={subject}>
-                {subject}
+            {sections.map((section) => (
+              <option key={section} value={section}>
+                {section}
               </option>
             ))}
           </NativeSelect>
@@ -111,11 +148,19 @@ export function QuestionListPage({ markedOnly = false }: QuestionListPageProps) 
           </p>
         ) : (
           <ul>
-            {visible.map((question) => (
-              <QuestionListRow key={question.id} question={question} stats={stats[question.id]} mark={marks[question.id]} />
+            {pageItems.map((question) => (
+              <QuestionListRow
+                key={question.id}
+                question={question}
+                stats={stats[question.id]}
+                mark={marks[question.id]}
+                expanded={expanded}
+              />
             ))}
           </ul>
         )}
+
+        <QuestionListPager page={page} pageCount={pageCount} onChange={goToPage} />
       </CardContent>
     </Card>
   )

@@ -19,6 +19,7 @@ export function QuestionAttemptBody({ question, attempt }: QuestionAttemptBodyPr
     isCorrect,
     nextReviewDays,
     explanation,
+    isExplanationOpen,
     isExplaining,
     explanationError,
     submitError,
@@ -51,7 +52,9 @@ export function QuestionAttemptBody({ question, attempt }: QuestionAttemptBodyPr
 
       {submitError && <p className="text-sm text-red-500">{submitError}</p>}
 
-      <ExplanationPanel isLoading={isExplaining} error={explanationError} explanation={explanation} />
+      {isExplanationOpen && (
+        <ExplanationPanel isLoading={isExplaining} error={explanationError} explanation={explanation} />
+      )}
     </div>
   )
 }

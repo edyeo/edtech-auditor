@@ -16,6 +16,7 @@ export function useQuestionAttempt(question: QuestionPublic | null) {
   const [nextReviewDays, setNextReviewDays] = useState<number | null>(null)
 
   const [explanation, setExplanation] = useState<string | null>(null)
+  const [isExplanationOpen, setIsExplanationOpen] = useState(false)
   const [isExplaining, setIsExplaining] = useState(false)
   const [explanationError, setExplanationError] = useState<string | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
@@ -48,6 +49,7 @@ export function useQuestionAttempt(question: QuestionPublic | null) {
     setIsCorrect(null)
     setNextReviewDays(null)
     setExplanation(null)
+    setIsExplanationOpen(false)
     setIsExplaining(false)
     setExplanationError(null)
     setSubmitError(null)
@@ -83,13 +85,23 @@ export function useQuestionAttempt(question: QuestionPublic | null) {
       next.boxLevel === 0 ? 0 : Math.round((Date.parse(next.dueAt) - Date.now()) / 86_400_000),
     )
     void saveReviewState(question.id, next)
-    // A wrong answer fetches the explanation right away; the server reuses the stored one.
-    if (!result.is_correct) void loadExplanation(question.id)
-  }, [question, selectedIndex, reviewState, loadExplanation])
+    // A wrong answer opens the explanation right away; the server reuses the stored one.
+    if (!result.is_correct) {
+      setIsExplanationOpen(true)
+      if (explanation === null) void loadExplanation(question.id)
+    }
+  }, [question, selectedIndex, reviewState, explanation, loadExplanation])
 
-  const requestExplanation = useCallback(async () => {
-    if (question) await loadExplanation(question.id)
-  }, [question, loadExplanation])
+  /** 해설보기 button: works before and after grading; a loaded explanation is not fetched again. */
+  const toggleExplanation = useCallback(() => {
+    if (!question) return
+    if (isExplanationOpen) {
+      setIsExplanationOpen(false)
+      return
+    }
+    setIsExplanationOpen(true)
+    if (explanation === null && !isExplaining) void loadExplanation(question.id)
+  }, [question, isExplanationOpen, explanation, isExplaining, loadExplanation])
 
   return {
     selectedIndex,
@@ -100,12 +112,13 @@ export function useQuestionAttempt(question: QuestionPublic | null) {
     isCorrect,
     nextReviewDays,
     explanation,
+    isExplanationOpen,
     isExplaining,
     explanationError,
     submitError,
     selectChoice,
     submitAnswer,
-    requestExplanation,
+    toggleExplanation,
     reset,
   }
 }

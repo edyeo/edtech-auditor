@@ -1,7 +1,10 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
+import { ExplanationPanel } from '@/components/explanation-panel'
 import { Button } from '@/components/ui/button'
 import { OxQuestionDetail } from '@/features/ox-quiz/components/ox-question-detail'
 import type { OxAnswer, OxItem, OxResult } from '@/features/ox-quiz/types/ox-quiz.types'
+import { fetchOxExplanation } from '@/features/ox-quiz/utils/ox-quiz.api'
+import { useToggledExplanation } from '@/features/ox-quiz/utils/use-toggled-explanation'
 import { cn } from '@/lib/utils'
 
 const ANSWERS: OxAnswer[] = ['O', 'X']
@@ -16,6 +19,11 @@ type OxStatementRowProps = {
 export function OxStatementRow({ item, result, isPending, onAnswer }: OxStatementRowProps) {
   const [isOpen, setIsOpen] = useState(false)
   const detailId = `ox-detail-${item.key.replace('#', '-')}`
+  const loadExplanation = useCallback(
+    () => fetchOxExplanation(item.question.id, item.statementIndex),
+    [item.question.id, item.statementIndex],
+  )
+  const explanation = useToggledExplanation(loadExplanation)
 
   return (
     <li className="border-b py-3 last:border-b-0">
@@ -49,17 +57,33 @@ export function OxStatementRow({ item, result, isPending, onAnswer }: OxStatemen
             {result.isCorrect ? '정답' : '오답'} · 이 보기는 {result.isTrue ? '옳은 설명(O)' : '옳지 않은 설명(X)'}
           </p>
         )}
-        <Button
-          type="button"
-          variant="ghost"
-          aria-expanded={isOpen}
-          aria-controls={detailId}
-          onClick={() => setIsOpen((open) => !open)}
-          className="ml-auto h-11 md:h-8"
-        >
-          문제보기
-        </Button>
+        <div className="ml-auto flex gap-1">
+          <Button
+            type="button"
+            variant="ghost"
+            aria-expanded={explanation.isOpen}
+            onClick={() => void explanation.toggle()}
+            className="h-11 md:h-8"
+          >
+            {explanation.isOpen ? '해설 닫기' : '해설보기'}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            aria-expanded={isOpen}
+            aria-controls={detailId}
+            onClick={() => setIsOpen((open) => !open)}
+            className="h-11 md:h-8"
+          >
+            문제보기
+          </Button>
+        </div>
       </div>
+      {explanation.isOpen && (
+        <div className="mt-2">
+          <ExplanationPanel isLoading={explanation.isLoading} error={explanation.error} explanation={explanation.text} />
+        </div>
+      )}
       {isOpen && <OxQuestionDetail id={detailId} question={item.question} choiceIndex={item.choiceIndex} />}
     </li>
   )

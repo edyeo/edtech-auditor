@@ -24,3 +24,9 @@ export async function checkOxStatement(
   })
   return parseJsonOrThrow(response)
 }
+
+/** Why one statement is true or false; fetched when the learner asks for it. */
+export async function fetchOxExplanation(questionId: string, statementIndex: number): Promise<string> {
+  const response = await fetch(`/api/ox/explanations/${encodeURIComponent(questionId)}/${statementIndex}`)
+  return (await parseJsonOrThrow<{ explanation: string }>(response)).explanation
+}

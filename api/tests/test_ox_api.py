@@ -1,7 +1,12 @@
+import json
+from pathlib import Path
+
 import pytest
 
 from api.repositories.ox_question_repository import OxQuestionRepository
 from api.repositories.question_repository import QuestionRepository
+
+EXPLANATIONS_PATH = Path(__file__).resolve().parent.parent / "data" / "ox_explanations.json"
 
 _ox = OxQuestionRepository()
 _bank = QuestionRepository()
@@ -18,6 +23,16 @@ def _derived_ids(polarity: str) -> list[str]:
 
 def _authored_ids() -> list[str]:
     return [qid for qid in _ox.list_ids() if isinstance(_ox.entry(qid), list)]
+
+
+def _default_verdicts(question_id: str) -> list[bool]:
+    """Truth value of every statement of a question with the bundled answer keys."""
+    entry = _ox.entry(question_id)
+    if isinstance(entry, list):
+        return [item.is_true for item in entry]
+    question = _bank.get_by_id(question_id)
+    keys = {question.answer_index, *question.also_correct}
+    return [(index in keys) == (entry == "positive") for index in range(len(question.choices))]
 
 
 async def verdict(client, question_id: str, statement_index: int, answer: str = "O") -> dict:
@@ -162,3 +177,38 @@ async def test_admin_answer_correction_changes_a_derived_verdict(client, admin):
         assert (await verdict(client, question_id, corrected))["is_true"] is True
     finally:
         await client.delete(f"/api/admin/questions/{question_id}/answer", headers=admin)
+
+
+def test_every_statement_has_an_explanation_that_agrees_with_its_verdict():
+    explanations = json.loads(EXPLANATIONS_PATH.read_text(encoding="utf-8"))
+    assert set(explanations) == set(_ox.list_ids())
+    for question_id in _ox.list_ids():
+        verdicts = _default_verdicts(question_id)
+        assert len(explanations[question_id]) == len(verdicts), question_id
+        for index, (text, is_true) in enumerate(zip(explanations[question_id], verdicts)):
+            expected = "옳은 설명(O)입니다. " if is_true else "옳지 않은 설명(X)입니다. "
+            assert text.startswith(expected), (question_id, index, text[:30])
+            assert len(text) > len(expected) + 10, (question_id, index)
+
+
+async def test_statement_explanation_is_served_on_demand(client):
+    question_id = _derived_ids("negative")[0]
+    answer_index = _bank.get_by_id(question_id).answer_index
+    response = await client.get(f"/api/ox/explanations/{question_id}/{answer_index}")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["question_id"] == question_id and body["statement_index"] == answer_index
+    assert body["explanation"].startswith("옳지 않은 설명(X)입니다.")  # the answer choice of a negative stem
+
+
+async def test_explanation_of_an_authored_statement(client):
+    question_id = _authored_ids()[0]
+    response = await client.get(f"/api/ox/explanations/{question_id}/0")
+    assert response.status_code == 200 and response.json()["explanation"]
+
+
+async def test_explanation_for_unknown_question_or_index(client):
+    assert (await client.get("/api/ox/explanations/2021-22-01/0")).status_code == 404  # project management
+    question_id = _derived_ids("positive")[0]
+    assert (await client.get(f"/api/ox/explanations/{question_id}/4")).status_code == 422
+    assert (await client.get(f"/api/ox/explanations/{question_id}/-1")).status_code == 422

@@ -1,7 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.errors import InvalidAnswerError, QuestionNotFoundError
-from api.models.ox import OxAnswer, OxCheckResponse, OxStatementPublic
+from api.models.ox import OxAnswer, OxCheckResponse, OxExplanationResponse, OxStatementPublic
 from api.repositories.ox_question_repository import OxQuestionRepository
 from api.repositories.question_repository import QuestionRepository
 from api.services.question_service import QuestionService
@@ -44,6 +44,23 @@ class OxService:
                     for index, item in enumerate(entry)
                 ]
         return statements
+
+    def get_explanation(self, question_id: str, statement_index: int) -> OxExplanationResponse:
+        entry = self._repository.entry(question_id)
+        if entry is None:
+            raise QuestionNotFoundError(question_id)
+        question = self._bank.get_by_id(question_id)
+        assert question is not None, question_id
+        statement_count = len(question.choices) if isinstance(entry, str) else len(entry)
+        if statement_index >= statement_count:
+            raise InvalidAnswerError()
+
+        explanation = self._repository.explanation(question_id, statement_index)
+        if explanation is None:
+            raise QuestionNotFoundError(question_id)
+        return OxExplanationResponse(
+            question_id=question_id, statement_index=statement_index, explanation=explanation
+        )
 
     async def check(
         self, session: AsyncSession | None, *, question_id: str, statement_index: int, answer: OxAnswer

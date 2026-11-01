@@ -6,6 +6,7 @@ from typing import Literal
 from api.models.ox import OxAuthoredStatement
 
 DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "ox_questions.json"
+EXPLANATIONS_PATH = Path(__file__).resolve().parent.parent / "data" / "ox_explanations.json"
 
 Polarity = Literal["positive", "negative"]
 """positive: the stem asks for the correct statement, so the answer choice is true.
@@ -24,6 +25,12 @@ def _load() -> dict[str, OxEntry]:
     }
 
 
+@lru_cache
+def _load_explanations() -> dict[str, list[str]]:
+    """Per question, one explanation per statement, in the same order as the statements."""
+    return json.loads(EXPLANATIONS_PATH.read_text(encoding="utf-8"))
+
+
 class OxQuestionRepository:
     """Questions of the audit (감리) part that can be played as O/X statements.
 
@@ -36,3 +43,7 @@ class OxQuestionRepository:
 
     def entry(self, question_id: str) -> OxEntry | None:
         return _load().get(question_id)
+
+    def explanation(self, question_id: str, statement_index: int) -> str | None:
+        explanations = _load_explanations().get(question_id, [])
+        return explanations[statement_index] if 0 <= statement_index < len(explanations) else None

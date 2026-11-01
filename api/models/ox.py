@@ -24,6 +24,13 @@ class OxStatementPublic(BaseModel):
     """Choice to highlight in the full question; `None` when the statement covers a 가/나/다 item or a blank."""
 
 
+class OxExplanationResponse(BaseModel):
+    question_id: str
+    statement_index: int
+    explanation: str
+    """Why the statement is true or false; asking for it before answering is the learner's choice."""
+
+
 class OxCheckRequest(BaseModel):
     question_id: str
     statement_index: int = Field(ge=0)

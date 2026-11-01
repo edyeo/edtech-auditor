@@ -1,6 +1,6 @@
 import { QuestionChoiceList } from '@/components/question-choice-list'
 import { QuestionStem } from '@/components/question-stem'
-import { ExplanationPanel } from '@/features/exam/components/explanation-panel'
+import { ExplanationPanel } from '@/components/explanation-panel'
 import type { QuestionAttempt } from '@/features/exam/utils/use-question-attempt'
 import type { QuestionPublic } from '@/types/question.types'
 

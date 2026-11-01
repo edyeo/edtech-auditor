@@ -23,7 +23,7 @@ export function QuestionAttemptActions({ attempt, afterChecked }: QuestionAttemp
         aria-expanded={attempt.isExplanationOpen}
         onClick={attempt.toggleExplanation}
       >
-        {attempt.isExplanationOpen ? '해설 닫기' : '해설보기'}
+        {attempt.isExplanationOpen ? '해설닫기' : '해설보기'}
       </Button>
       {attempt.isChecked && afterChecked}
     </>

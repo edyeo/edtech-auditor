@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react'
 import { ExplanationPanel } from '@/components/explanation-panel'
+import { QuestionMarkerBox } from '@/components/question-marker-box'
 import { Button } from '@/components/ui/button'
 import { OxQuestionDetail } from '@/features/ox-quiz/components/ox-question-detail'
 import type { OxAnswer, OxItem, OxResult } from '@/features/ox-quiz/types/ox-quiz.types'
@@ -27,7 +28,14 @@ export function OxStatementRow({ item, result, isPending, onAnswer }: OxStatemen
 
   return (
     <li className="border-b py-3 last:border-b-0">
-      <p className="text-base leading-relaxed md:text-sm">{item.statement}</p>
+      {/* Markers belong to the question, so every statement of it shows the same boxes. On narrow screens
+          they sit on their own line above the statement, at the right. */}
+      <div className="flex flex-col-reverse items-end gap-1 md:flex-row md:items-start md:justify-between md:gap-3">
+        <p className="w-full text-base leading-relaxed md:w-auto md:text-sm">{item.statement}</p>
+        <div className="shrink-0">
+          <QuestionMarkerBox questionId={item.question.id} />
+        </div>
+      </div>
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <div role="group" aria-label="옳은 설명이면 O, 옳지 않은 설명이면 X" className="flex gap-2">
           {ANSWERS.map((answer) => {
@@ -65,7 +73,7 @@ export function OxStatementRow({ item, result, isPending, onAnswer }: OxStatemen
             onClick={() => void explanation.toggle()}
             className="h-11 md:h-8"
           >
-            {explanation.isOpen ? '해설 닫기' : '해설보기'}
+            {explanation.isOpen ? '해설닫기' : '해설보기'}
           </Button>
           <Button
             type="button"
@@ -75,7 +83,7 @@ export function OxStatementRow({ item, result, isPending, onAnswer }: OxStatemen
             onClick={() => setIsOpen((open) => !open)}
             className="h-11 md:h-8"
           >
-            문제보기
+            {isOpen ? '문제닫기' : '문제보기'}
           </Button>
         </div>
       </div>

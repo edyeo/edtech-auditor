@@ -4,6 +4,9 @@ import { buildOxItems } from '@/features/ox-quiz/utils/build-ox-items'
 import { DEFAULT_OX_FILTER, filterOxItems } from '@/features/ox-quiz/utils/filter-ox-items'
 import { checkOxStatement, fetchOxStatements } from '@/features/ox-quiz/utils/ox-quiz.api'
 import { shuffleItems } from '@/features/ox-quiz/utils/shuffle-items'
+import { recordOxStats } from '@/lib/learner-actions'
+import { toOxStats } from '@/lib/learner.api'
+import { useOxStats } from '@/lib/use-ox-stats'
 import { useQuestionBank } from '@/lib/use-question-bank'
 import { useQuestionMarks } from '@/lib/use-question-marks'
 import { useQuestionStats } from '@/lib/use-question-stats'
@@ -25,10 +28,13 @@ export function useOxQuiz() {
   const bank = useQuestionBank()
   const { markedIds } = useQuestionMarks()
   const stats = useQuestionStats()
+  const oxStats = useOxStats()
   const [statements, setStatements] = useState<OxStatement[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [reshuffled, setReshuffled] = useState<OxItem[] | null>(null)
   const [filter, setFilter] = useState<OxFilter>(DEFAULT_OX_FILTER)
+  // The "solved" filter reads this snapshot, retaken whenever the list is rebuilt on purpose.
+  const [solvedSnapshot, setSolvedSnapshot] = useState(oxStats)
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const [results, setResults] = useState<Record<string, OxResult>>({})
   const [pendingKeys, setPendingKeys] = useState<ReadonlySet<string>>(new Set())
@@ -54,8 +60,8 @@ export function useOxQuiz() {
   const ordered = filter.sort === 'order' ? items : (reshuffled ?? initialOrder)
   const markedSet = useMemo(() => new Set(markedIds), [markedIds])
   const filtered = useMemo(
-    () => filterOxItems(ordered, filter, markedSet, stats),
-    [ordered, filter, markedSet, stats],
+    () => filterOxItems(ordered, filter, markedSet, stats, solvedSnapshot),
+    [ordered, filter, markedSet, stats, solvedSnapshot],
   )
 
   const years = useMemo(() => [...new Set(items.map((item) => item.question.year))].sort((a, b) => b - a), [items])
@@ -63,6 +69,7 @@ export function useOxQuiz() {
 
   function updateFilter(patch: Partial<OxFilter>) {
     setFilter((current) => ({ ...current, ...patch }))
+    setSolvedSnapshot(oxStats)
     setVisibleCount(PAGE_SIZE)
   }
 
@@ -73,6 +80,7 @@ export function useOxQuiz() {
     setPendingKeys((current) => new Set(current).add(item.key))
     try {
       const verdict = await checkOxStatement(item.question.id, item.statementIndex, choice)
+      if (verdict.stats) recordOxStats(item.key, toOxStats(verdict.stats))
       if (round !== roundRef.current) return
       setResults((current) => ({
         ...current,
@@ -93,6 +101,7 @@ export function useOxQuiz() {
   function reshuffle() {
     roundRef.current += 1
     setReshuffled(shuffleItems(items))
+    setSolvedSnapshot(oxStats)
     setResults({})
     setVisibleCount(PAGE_SIZE)
     setAnswerError(null)
@@ -106,6 +115,7 @@ export function useOxQuiz() {
     years,
     subjects,
     hasMarks: markedIds.length > 0,
+    oxStats,
     filter,
     updateFilter,
     totalCount: filtered.length,

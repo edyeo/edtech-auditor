@@ -9,6 +9,7 @@ import {
   DEFAULT_STUDY_FILTER,
   filterStudyQuestions,
   orderStudyQueue,
+  type StudyAttempted,
   type StudyFilter,
 } from '@/features/exam/utils/build-study-queue'
 import { isDueForReview } from '@/features/exam/utils/is-due-for-review'
@@ -16,8 +17,9 @@ import type { SessionMode } from '@/features/exam/utils/use-exam-session'
 import { paginateItems } from '@/lib/paginate-items'
 import { listQuestionSections } from '@/lib/question-section'
 import { useQuestionBank } from '@/lib/use-question-bank'
+import { useQuestionStats } from '@/lib/use-question-stats'
 import { useReviewState } from '@/lib/use-review-state'
-import type { ReviewStateMap } from '@/types/learner.types'
+import type { QuestionStatsMap, ReviewStateMap } from '@/types/learner.types'
 
 // Every card carries the whole question and its answering controls, so a page stays short.
 const PAGE_SIZE = 10
@@ -26,17 +28,23 @@ const PAGE_SIZE = 10
 export function StudyListPage() {
   const { questions, isLoading, error } = useQuestionBank()
   const reviewState = useReviewState()
+  const stats = useQuestionStats()
   const [mode, setMode] = useState<SessionMode>('due')
   const [filter, setFilter] = useState<StudyFilter>(DEFAULT_STUDY_FILTER)
   // The order is frozen to this snapshot: grading a question changes the live review state, and the
   // list must not reshuffle (or drop the card) under the learner. It is retaken when the list is
   // rebuilt on purpose, i.e. when the mode or a filter changes.
   const [queueReviewState, setQueueReviewState] = useState<ReviewStateMap>(reviewState)
+  // Same for the solved/unsolved filter: a question graded just now must not drop out of an "unsolved" list.
+  const [queueStats, setQueueStats] = useState<QuestionStatsMap>(stats)
   const [requestedPage, setRequestedPage] = useState(1)
 
   const years = useMemo(() => [...new Set(questions.map((q) => q.year))].sort((a, b) => b - a), [questions])
   const sections = useMemo(() => listQuestionSections(questions), [questions])
-  const inScope = useMemo(() => filterStudyQuestions(questions, filter), [questions, filter])
+  const inScope = useMemo(
+    () => filterStudyQuestions(questions, filter, queueStats),
+    [questions, filter, queueStats],
+  )
   const queue = useMemo(
     () => orderStudyQueue(inScope, queueReviewState, mode),
     [inScope, queueReviewState, mode],
@@ -49,6 +57,7 @@ export function StudyListPage() {
 
   function rebuild(patch: { mode?: SessionMode; filter?: Partial<StudyFilter> }) {
     setQueueReviewState(reviewState)
+    setQueueStats(stats)
     if (patch.mode) setMode(patch.mode)
     if (patch.filter) setFilter((current) => ({ ...current, ...patch.filter }))
     setRequestedPage(1)
@@ -100,6 +109,15 @@ export function StudyListPage() {
                   {section}
                 </option>
               ))}
+            </NativeSelect>
+            <NativeSelect
+              aria-label="풀이 여부"
+              value={filter.attempted}
+              onChange={(e) => rebuild({ filter: { attempted: e.target.value as StudyAttempted } })}
+            >
+              <option value="all">풀이 전체</option>
+              <option value="unattempted">안 풀어본 문제</option>
+              <option value="attempted">풀어본 문제</option>
             </NativeSelect>
             <Input
               type="search"

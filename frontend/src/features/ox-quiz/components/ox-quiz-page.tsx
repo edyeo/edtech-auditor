@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
 import { OxStatementRow } from '@/features/ox-quiz/components/ox-statement-row'
-import type { OxSort } from '@/features/ox-quiz/types/ox-quiz.types'
+import type { OxSolved, OxSort } from '@/features/ox-quiz/types/ox-quiz.types'
 import { useOxQuiz } from '@/features/ox-quiz/utils/use-ox-quiz'
 
 export function OxQuizPage() {
@@ -63,6 +63,15 @@ export function OxQuizPage() {
             </NativeSelect>
           )}
           <NativeSelect
+            aria-label="풀이 여부"
+            value={quiz.filter.solved}
+            onChange={(e) => quiz.updateFilter({ solved: e.target.value as OxSolved })}
+          >
+            <option value="all">풀이 전체</option>
+            <option value="unsolved">안 풀어본 보기</option>
+            <option value="solved">풀어본 보기</option>
+          </NativeSelect>
+          <NativeSelect
             aria-label="정렬"
             value={quiz.filter.sort}
             onChange={(e) => quiz.updateFilter({ sort: e.target.value as OxSort })}
@@ -120,6 +129,7 @@ export function OxQuizPage() {
                 item={item}
                 result={quiz.results[item.key]}
                 isPending={quiz.pendingKeys.has(item.key)}
+                stats={quiz.oxStats[item.key]}
                 onAnswer={quiz.answer}
               />
             ))}

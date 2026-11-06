@@ -50,6 +50,7 @@ class LearnerService:
             marks=await self._repo.get_marks(learner_id),
             stats=await self._repo.get_stats(learner_id),
             review=await self._repo.get_review(learner_id),
+            ox_stats=await self._repo.get_ox_stats(learner_id),
         )
 
     async def list_mini_tests(self, learner_id: UUID) -> list[MiniTestRecord]:

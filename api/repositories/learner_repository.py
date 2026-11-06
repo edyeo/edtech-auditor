@@ -5,8 +5,23 @@ from sqlalchemy import delete, func, select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.db.tables import mini_test_items, mini_test_records, question_marks, question_stats, review_states
-from api.models.learner import MAX_MARK_COUNT, MarkOut, MiniTestItem, MiniTestRecord, ReviewState, StatsOut
+from api.db.tables import (
+    mini_test_items,
+    mini_test_records,
+    ox_statement_stats,
+    question_marks,
+    question_stats,
+    review_states,
+)
+from api.models.learner import (
+    MAX_MARK_COUNT,
+    MarkOut,
+    MiniTestItem,
+    MiniTestRecord,
+    OxStatsOut,
+    ReviewState,
+    StatsOut,
+)
 
 MAX_MINI_TEST_RECORDS = 100
 
@@ -41,6 +56,17 @@ class LearnerRepository:
         )
         return {
             r.question_id: StatsOut(attempts=r.attempts, wrong=r.wrong, streak=r.streak, last_wrong_at=r.last_wrong_at)
+            for r in rows
+        }
+
+    async def get_ox_stats(self, learner_id: UUID) -> dict[str, OxStatsOut]:
+        rows = await self._session.execute(
+            select(ox_statement_stats).where(ox_statement_stats.c.learner_id == learner_id)
+        )
+        return {
+            f"{r.question_id}#{r.statement_index}": OxStatsOut(
+                attempts=r.attempts, wrong=r.wrong, last_attempt_at=r.last_attempt_at
+            )
             for r in rows
         }
 
@@ -98,7 +124,7 @@ class LearnerRepository:
         )
 
     async def has_any_data(self, learner_id: UUID) -> bool:
-        for table in (question_marks, question_stats, review_states, mini_test_records):
+        for table in (question_marks, question_stats, review_states, mini_test_records, ox_statement_stats):
             count = await self._session.scalar(
                 select(func.count()).select_from(table).where(table.c.learner_id == learner_id)
             )
@@ -189,6 +215,36 @@ class LearnerRepository:
         )
         row = (await self._session.execute(stmt)).one()
         return StatsOut(attempts=row.attempts, wrong=row.wrong, streak=row.streak, last_wrong_at=row.last_wrong_at)
+
+    async def record_ox_attempt(
+        self, learner_id: UUID, question_id: str, statement_index: int, is_correct: bool
+    ) -> OxStatsOut:
+        """Atomic counter update in ONE statement, so concurrent answers can't lose an increment."""
+        now = datetime.now(UTC)
+        stmt = insert(ox_statement_stats).values(
+            learner_id=learner_id,
+            question_id=question_id,
+            statement_index=statement_index,
+            attempts=1,
+            wrong=0 if is_correct else 1,
+            last_attempt_at=now,
+        )
+        stmt = stmt.on_conflict_do_update(
+            index_elements=[
+                ox_statement_stats.c.learner_id,
+                ox_statement_stats.c.question_id,
+                ox_statement_stats.c.statement_index,
+            ],
+            set_={
+                "attempts": ox_statement_stats.c.attempts + 1,
+                "wrong": ox_statement_stats.c.wrong + (0 if is_correct else 1),
+                "last_attempt_at": now,
+            },
+        ).returning(
+            ox_statement_stats.c.attempts, ox_statement_stats.c.wrong, ox_statement_stats.c.last_attempt_at
+        )
+        row = (await self._session.execute(stmt)).one()
+        return OxStatsOut(attempts=row.attempts, wrong=row.wrong, last_attempt_at=row.last_attempt_at)
 
     async def reset_streak(self, learner_id: UUID, question_id: str) -> StatsOut | None:
         row = (

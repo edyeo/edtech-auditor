@@ -1,12 +1,10 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.auth import verify_access_token
 from api.db.session import get_session
-from api.errors import InvalidTokenError
 from api.models.learner import (
     AttemptRequest,
     AttemptResponse,
@@ -21,15 +19,8 @@ from api.models.learner import (
     ReviewState,
     SetMarkRequest,
 )
+from api.routers.deps import get_learner_id
 from api.services.learner_service import LearnerService
-
-
-def get_learner_id(authorization: str | None = Header(default=None)) -> UUID:
-    """The signed-in user: the id inside the Supabase access token sent as `Authorization: Bearer ...`."""
-    scheme, _, token = (authorization or "").partition(" ")
-    if scheme.lower() != "bearer" or not token.strip():
-        raise InvalidTokenError()
-    return verify_access_token(token.strip())
 
 
 def get_service(session: Annotated[AsyncSession, Depends(get_session)]) -> LearnerService:

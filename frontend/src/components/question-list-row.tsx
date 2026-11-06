@@ -34,6 +34,7 @@ export function QuestionListRow({ question, stats, mark, expanded = false }: Que
         </a>
         <div className="flex shrink-0 flex-col items-end gap-1">
           <QuestionMarkerBox questionId={question.id} />
+          {stats && stats.attempts > 0 && <Badge variant="outline">풀이 {stats.attempts}회</Badge>}
           {stats && stats.wrong > 0 && <Badge variant="secondary">오답 {stats.wrong}회</Badge>}
           {streak >= autoMarkStreak && <Badge variant="destructive">연속 {streak}회 오답</Badge>}
           {mark?.source === 'auto' && <Badge variant="outline">자동 마킹</Badge>}

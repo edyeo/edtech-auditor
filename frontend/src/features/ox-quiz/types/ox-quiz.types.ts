@@ -25,6 +25,8 @@ export type OxCheckResponse = {
   statement_index: number
   is_true: boolean
   is_correct: boolean
+  /** Answer counts after this answer; null when the answer was not counted (signed out). */
+  stats: { attempts: number; wrong: number; last_attempt_at: string } | null
 }
 
 export type OxResult = {
@@ -36,11 +38,15 @@ export type OxResult = {
 /** random: reshuffled on demand; order: the exam's question order, so a statement is easy to find again. */
 export type OxSort = 'random' | 'order'
 
+/** Whether the learner has answered a statement before. */
+export type OxSolved = 'all' | 'solved' | 'unsolved'
+
 export type OxFilter = {
   year: number | 'all'
   subject: string | 'all'
   query: string
   markedOnly: boolean
   wrongOnly: boolean
+  solved: OxSolved
   sort: OxSort
 }

@@ -1,6 +1,7 @@
 import { createStore } from '@/lib/create-store'
 import type {
   MiniTestRecord,
+  OxStatsMap,
   QuestionMarkMap,
   QuestionStatsMap,
   ReviewStateMap,
@@ -19,6 +20,7 @@ export type LearnerState = {
   maxMarkCount: number
   marks: QuestionMarkMap
   stats: QuestionStatsMap
+  oxStats: OxStatsMap
   review: ReviewStateMap
   history: MiniTestRecord[]
 }
@@ -31,6 +33,7 @@ export const INITIAL_LEARNER_STATE: LearnerState = {
   maxMarkCount: 5,
   marks: {},
   stats: {},
+  oxStats: {},
   review: {},
   history: [],
 }

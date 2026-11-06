@@ -1,10 +1,12 @@
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, Path
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.db.session import get_optional_session
 from api.models.ox import OxCheckRequest, OxCheckResponse, OxExplanationResponse, OxStatementPublic
+from api.routers.deps import get_optional_learner_id
 from api.services.ox_service import OxService
 
 router = APIRouter(prefix="/api/ox", tags=["ox"])
@@ -25,8 +27,15 @@ def get_explanation(question_id: str, statement_index: Annotated[int, Path(ge=0)
 
 @router.post("/check", response_model=OxCheckResponse)
 async def check(
-    payload: OxCheckRequest, session: Annotated[AsyncSession | None, Depends(get_optional_session)]
+    payload: OxCheckRequest,
+    session: Annotated[AsyncSession | None, Depends(get_optional_session)],
+    learner_id: Annotated[UUID | None, Depends(get_optional_learner_id)],
 ) -> OxCheckResponse:
+    """Grade one statement. A signed-in learner's answer is also counted; without a token it only grades."""
     return await _service.check(
-        session, question_id=payload.question_id, statement_index=payload.statement_index, answer=payload.answer
+        session,
+        question_id=payload.question_id,
+        statement_index=payload.statement_index,
+        answer=payload.answer,
+        learner_id=learner_id,
     )

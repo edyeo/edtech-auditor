@@ -1,6 +1,8 @@
 import { clearSession, getAccessToken } from '@/lib/auth-token'
 import type {
   MiniTestRecord,
+  OxStats,
+  OxStatsMap,
   QuestionMark,
   QuestionMarkMap,
   QuestionStats,
@@ -38,6 +40,7 @@ async function learnerRequest<T>(path: string, init: RequestInit = {}): Promise<
 // ---- wire format (snake_case) <-> app types (camelCase) ---------------------------------------
 
 type WireMark = { marked_at: string; source: 'manual' | 'auto'; count: number }
+type WireOxStats = { attempts: number; wrong: number; last_attempt_at: string }
 type WireStats = { attempts: number; wrong: number; streak: number; last_wrong_at: string | null }
 type WireReview = {
   box_level: number
@@ -55,6 +58,11 @@ type WireMiniTest = {
 }
 
 const toMark = (m: WireMark): QuestionMark => ({ markedAt: m.marked_at, source: m.source, count: m.count })
+export const toOxStats = (s: WireOxStats): OxStats => ({
+  attempts: s.attempts,
+  wrong: s.wrong,
+  lastAttemptAt: s.last_attempt_at,
+})
 const toStats = (s: WireStats): QuestionStats => ({
   attempts: s.attempts,
   wrong: s.wrong,
@@ -98,6 +106,7 @@ export async function fetchLearnerState(): Promise<{
   maxMarkCount: number
   marks: QuestionMarkMap
   stats: QuestionStatsMap
+  oxStats: OxStatsMap
   review: ReviewStateMap
 }> {
   const raw = await learnerRequest<{
@@ -105,6 +114,7 @@ export async function fetchLearnerState(): Promise<{
     max_mark_count: number
     marks: Record<string, WireMark>
     stats: Record<string, WireStats>
+    ox_stats: Record<string, WireOxStats>
     review: Record<string, WireReview>
   }>('/state')
   return {
@@ -112,6 +122,7 @@ export async function fetchLearnerState(): Promise<{
     maxMarkCount: raw.max_mark_count,
     marks: mapValues(raw.marks, toMark),
     stats: mapValues(raw.stats, toStats),
+    oxStats: mapValues(raw.ox_stats, toOxStats),
     review: mapValues(raw.review, toReview),
   }
 }

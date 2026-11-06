@@ -46,6 +46,17 @@ question_stats = Table(
     Column("last_wrong_at", DateTime(timezone=True)),
 )
 
+ox_statement_stats = Table(
+    "ox_statement_stats",
+    metadata,
+    Column("learner_id", UUID(as_uuid=True), primary_key=True),
+    Column("question_id", Text, primary_key=True),
+    Column("statement_index", SmallInteger, primary_key=True),
+    Column("attempts", Integer, nullable=False),
+    Column("wrong", Integer, nullable=False),
+    Column("last_attempt_at", DateTime(timezone=True), nullable=False),
+)
+
 review_states = Table(
     "review_states",
     metadata,

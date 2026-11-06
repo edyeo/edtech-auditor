@@ -4,6 +4,7 @@ import { QuestionAttemptActions } from '@/features/exam/components/question-atte
 import { QuestionAttemptBody } from '@/features/exam/components/question-attempt-body'
 import { useQuestionAttempt } from '@/features/exam/utils/use-question-attempt'
 import { getQuestionSection } from '@/lib/question-section'
+import { useQuestionStats } from '@/lib/use-question-stats'
 import type { QuestionPublic } from '@/types/question.types'
 
 type StudyQuestionCardProps = {
@@ -13,6 +14,7 @@ type StudyQuestionCardProps = {
 /** One question of the study list, answered in place. */
 export function StudyQuestionCard({ question }: StudyQuestionCardProps) {
   const attempt = useQuestionAttempt(question)
+  const stats = useQuestionStats()[question.id]
 
   return (
     <Card className="w-full">
@@ -23,6 +25,9 @@ export function StudyQuestionCard({ question }: StudyQuestionCardProps) {
           </CardTitle>
           <QuestionMarkerBox questionId={question.id} />
         </div>
+        <p className="text-xs text-muted-foreground">
+          {stats && stats.attempts > 0 ? `풀이 ${stats.attempts}회 · 오답 ${stats.wrong}회` : '아직 안 풀어봄'}
+        </p>
       </CardHeader>
       <CardContent>
         <QuestionAttemptBody question={question} attempt={attempt} />

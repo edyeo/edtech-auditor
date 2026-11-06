@@ -1,23 +1,35 @@
 import { isDueForReview } from '@/features/exam/utils/is-due-for-review'
 import type { SessionMode } from '@/features/exam/utils/use-exam-session'
 import { getQuestionSection } from '@/lib/question-section'
-import type { ReviewStateMap } from '@/types/learner.types'
+import type { QuestionStatsMap, ReviewStateMap } from '@/types/learner.types'
 import type { QuestionPublic } from '@/types/question.types'
+
+/** Whether the learner has graded a question before. */
+export type StudyAttempted = 'all' | 'attempted' | 'unattempted'
 
 export type StudyFilter = {
   year: number | 'all'
   section: string | 'all'
   query: string
+  attempted: StudyAttempted
 }
 
-export const DEFAULT_STUDY_FILTER: StudyFilter = { year: 'all', section: 'all', query: '' }
+export const DEFAULT_STUDY_FILTER: StudyFilter = { year: 'all', section: 'all', query: '', attempted: 'all' }
 
-export function filterStudyQuestions(questions: QuestionPublic[], filter: StudyFilter): QuestionPublic[] {
+export function filterStudyQuestions(
+  questions: QuestionPublic[],
+  filter: StudyFilter,
+  stats: QuestionStatsMap,
+): QuestionPublic[] {
   const query = filter.query.trim().toLowerCase()
 
   return questions.filter((question) => {
     if (filter.year !== 'all' && question.year !== filter.year) return false
     if (filter.section !== 'all' && getQuestionSection(question) !== filter.section) return false
+    if (filter.attempted !== 'all') {
+      const attempted = (stats[question.id]?.attempts ?? 0) > 0
+      if (attempted !== (filter.attempted === 'attempted')) return false
+    }
     if (query) {
       const haystack = `${question.year} ${question.number}번 ${question.stem} ${question.choices.join(' ')}`
       if (!haystack.toLowerCase().includes(query)) return false

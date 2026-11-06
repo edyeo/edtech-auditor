@@ -11,6 +11,7 @@ import {
 import { INITIAL_LEARNER_STATE, learnerStore } from '@/lib/learner-state.store'
 import type {
   MiniTestRecord,
+  OxStats,
   QuestionMark,
   QuestionMarkMap,
   ReviewState,
@@ -136,6 +137,11 @@ export async function submitAttempt(
     marks: result.mark ? { ...s.marks, [questionId]: result.mark } : s.marks,
   }))
   return { check: result.check, autoMarked: result.autoMarked }
+}
+
+/** Store the new answer counts of an O/X statement (the server returns them with the verdict). */
+export function recordOxStats(statementKey: string, stats: OxStats): void {
+  learnerStore.update((s) => ({ ...s, oxStats: { ...s.oxStats, [statementKey]: stats } }))
 }
 
 /** Save a question's review box. Optimistic; a failed save only shows a notice. */

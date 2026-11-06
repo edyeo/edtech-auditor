@@ -7,6 +7,7 @@ import type { OxAnswer, OxItem, OxResult } from '@/features/ox-quiz/types/ox-qui
 import { fetchOxExplanation } from '@/features/ox-quiz/utils/ox-quiz.api'
 import { useToggledExplanation } from '@/features/ox-quiz/utils/use-toggled-explanation'
 import { cn } from '@/lib/utils'
+import type { OxStats } from '@/types/learner.types'
 
 const ANSWERS: OxAnswer[] = ['O', 'X']
 
@@ -14,10 +15,11 @@ type OxStatementRowProps = {
   item: OxItem
   result: OxResult | undefined
   isPending: boolean
+  stats: OxStats | undefined
   onAnswer: (item: OxItem, answer: OxAnswer) => void
 }
 
-export function OxStatementRow({ item, result, isPending, onAnswer }: OxStatementRowProps) {
+export function OxStatementRow({ item, result, isPending, stats, onAnswer }: OxStatementRowProps) {
   const [isOpen, setIsOpen] = useState(false)
   const detailId = `ox-detail-${item.key.replace('#', '-')}`
   const loadExplanation = useCallback(
@@ -65,6 +67,9 @@ export function OxStatementRow({ item, result, isPending, onAnswer }: OxStatemen
             {result.isCorrect ? '정답' : '오답'} · 이 보기는 {result.isTrue ? '옳은 설명(O)' : '옳지 않은 설명(X)'}
           </p>
         )}
+        <span className="text-xs text-muted-foreground">
+          {stats ? `풀이 ${stats.attempts}회 · 오답 ${stats.wrong}회` : '아직 안 풀어봄'}
+        </span>
         <div className="ml-auto flex gap-1">
           <Button
             type="button"

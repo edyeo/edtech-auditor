@@ -31,6 +31,12 @@ class StatsOut(BaseModel):
     last_wrong_at: datetime | None = None
 
 
+class OxStatsOut(BaseModel):
+    attempts: int
+    wrong: int
+    last_attempt_at: datetime
+
+
 class ReviewState(BaseModel):
     """Leitner box state, computed client-side (see computeNextReview) and stored as-is."""
 
@@ -63,6 +69,8 @@ class LearnerState(BaseModel):
     marks: dict[str, MarkOut]
     stats: dict[str, StatsOut]
     review: dict[str, ReviewState]
+    ox_stats: dict[str, OxStatsOut]
+    """O/X answer counts per statement, keyed "question_id#statement_index" (the key the O/X page uses)."""
 
 
 class MarkRemovedResponse(BaseModel):

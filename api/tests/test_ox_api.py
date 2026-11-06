@@ -1,3 +1,4 @@
+import asyncio
 import json
 from pathlib import Path
 
@@ -5,6 +6,7 @@ import pytest
 
 from api.repositories.ox_question_repository import OxQuestionRepository
 from api.repositories.question_repository import QuestionRepository
+from api.tests.conftest import access_token
 
 EXPLANATIONS_PATH = Path(__file__).resolve().parent.parent / "data" / "ox_explanations.json"
 
@@ -212,3 +214,79 @@ async def test_explanation_for_unknown_question_or_index(client):
     question_id = _derived_ids("positive")[0]
     assert (await client.get(f"/api/ox/explanations/{question_id}/4")).status_code == 422
     assert (await client.get(f"/api/ox/explanations/{question_id}/-1")).status_code == 422
+
+
+# ---- answer counts per statement (signed-in learners) ---------------------------------------------
+
+
+def _account() -> dict[str, str]:
+    return {"Authorization": f"Bearer {access_token()}"}
+
+
+async def answer_as(client, headers, question_id, statement_index, answer):
+    response = await client.post(
+        "/api/ox/check",
+        headers=headers,
+        json={"question_id": question_id, "statement_index": statement_index, "answer": answer},
+    )
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+async def test_an_answer_without_a_token_is_graded_but_not_counted(client):
+    result = await verdict(client, _derived_ids("positive")[0], 0)
+    assert result["stats"] is None
+
+
+async def test_each_answer_of_a_signed_in_learner_is_counted(client):
+    me = _account()
+    question_id = _derived_ids("negative")[0]
+    wrong_choice = _bank.get_by_id(question_id).answer_index  # the false statement
+
+    first = await answer_as(client, me, question_id, wrong_choice, "O")  # wrong: it is false
+    assert first["is_correct"] is False and first["stats"]["attempts"] == 1 and first["stats"]["wrong"] == 1
+
+    second = await answer_as(client, me, question_id, wrong_choice, "X")  # right
+    assert second["is_correct"] is True
+    assert (second["stats"]["attempts"], second["stats"]["wrong"]) == (2, 1)
+
+    state = (await client.get("/api/learner/state", headers=me)).json()
+    key = f"{question_id}#{wrong_choice}"
+    assert (state["ox_stats"][key]["attempts"], state["ox_stats"][key]["wrong"]) == (2, 1)
+    assert list(state["ox_stats"]) == [key]  # only the statement that was answered
+
+
+async def test_counts_belong_to_the_account(client):
+    question_id = _authored_ids()[0]
+    await answer_as(client, _account(), question_id, 0, "O")
+    stranger = _account()
+    assert (await client.get("/api/learner/state", headers=stranger)).json()["ox_stats"] == {}
+
+
+async def test_an_invalid_statement_is_not_counted(client):
+    me = _account()
+    question_id = _authored_ids()[0]
+    bad = await client.post(
+        "/api/ox/check",
+        headers=me,
+        json={"question_id": question_id, "statement_index": len(_ox.entry(question_id)), "answer": "O"},
+    )
+    assert bad.status_code == 422
+    assert (await client.get("/api/learner/state", headers=me)).json()["ox_stats"] == {}
+
+
+async def test_a_bad_token_is_refused_instead_of_being_treated_as_anonymous(client):
+    response = await client.post(
+        "/api/ox/check",
+        headers={"Authorization": "Bearer nope"},
+        json={"question_id": _derived_ids("positive")[0], "statement_index": 0, "answer": "O"},
+    )
+    assert response.status_code == 401
+
+
+async def test_simultaneous_answers_do_not_lose_counts(client):
+    me = _account()
+    question_id = _authored_ids()[0]
+    await asyncio.gather(*(answer_as(client, me, question_id, 0, "O") for _ in range(8)))
+    stats = (await client.get("/api/learner/state", headers=me)).json()["ox_stats"][f"{question_id}#0"]
+    assert stats["attempts"] == 8

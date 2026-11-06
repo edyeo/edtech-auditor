@@ -2,6 +2,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from api.models.learner import OxStatsOut
+
 OxAnswer = Literal["O", "X"]
 
 
@@ -44,3 +46,5 @@ class OxCheckResponse(BaseModel):
     """Whether the statement is true (O) given the current answer key."""
     is_correct: bool
     """Whether the learner's O/X answer matches `is_true`."""
+    stats: OxStatsOut | None = None
+    """The statement's answer counts after this answer; None when the request was not signed in."""

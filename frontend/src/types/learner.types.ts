@@ -16,6 +16,11 @@ export type QuestionStats = {
 }
 export type QuestionStatsMap = Record<string, QuestionStats>
 
+/** How often an O/X statement was answered, and how often wrongly. */
+export type OxStats = { attempts: number; wrong: number; lastAttemptAt: string }
+/** Keyed "question_id#statement_index". */
+export type OxStatsMap = Record<string, OxStats>
+
 export type ConfidenceLevel = 'low' | 'medium' | 'high'
 
 export type ReviewState = {

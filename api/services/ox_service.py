@@ -1,7 +1,10 @@
+from uuid import UUID
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.errors import InvalidAnswerError, QuestionNotFoundError
+from api.errors import DatabaseNotConfiguredError, InvalidAnswerError, QuestionNotFoundError
 from api.models.ox import OxAnswer, OxCheckResponse, OxExplanationResponse, OxStatementPublic
+from api.repositories.learner_repository import LearnerRepository
 from api.repositories.ox_question_repository import OxQuestionRepository
 from api.repositories.question_repository import QuestionRepository
 from api.services.question_service import QuestionService
@@ -63,7 +66,29 @@ class OxService:
         )
 
     async def check(
-        self, session: AsyncSession | None, *, question_id: str, statement_index: int, answer: OxAnswer
+        self,
+        session: AsyncSession | None,
+        *,
+        question_id: str,
+        statement_index: int,
+        answer: OxAnswer,
+        learner_id: UUID | None = None,
+    ) -> OxCheckResponse:
+        """Grade one statement; for a signed-in learner the answer is counted in the same transaction."""
+        if learner_id is None:
+            return await self._judge(session, question_id, statement_index, answer)
+        if session is None:
+            raise DatabaseNotConfiguredError()
+        async with session.begin():
+            # An invalid statement raises before anything is counted, and the transaction rolls back.
+            response = await self._judge(session, question_id, statement_index, answer)
+            stats = await LearnerRepository(session).record_ox_attempt(
+                learner_id, question_id, statement_index, response.is_correct
+            )
+        return response.model_copy(update={"stats": stats})
+
+    async def _judge(
+        self, session: AsyncSession | None, question_id: str, statement_index: int, answer: OxAnswer
     ) -> OxCheckResponse:
         entry = self._repository.entry(question_id)
         if entry is None:

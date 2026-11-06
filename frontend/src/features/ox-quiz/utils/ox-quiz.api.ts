@@ -1,4 +1,5 @@
 import type { OxAnswer, OxCheckResponse, OxStatement } from '@/features/ox-quiz/types/ox-quiz.types'
+import { getAccessToken } from '@/lib/auth-token'
 
 async function parseJsonOrThrow<T>(response: Response): Promise<T> {
   if (!response.ok) {
@@ -17,9 +18,11 @@ export async function checkOxStatement(
   statementIndex: number,
   answer: OxAnswer,
 ): Promise<OxCheckResponse> {
+  // The token lets the server count the answer for this account; without one it only grades.
+  const token = await getAccessToken()
   const response = await fetch('/api/ox/check', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     body: JSON.stringify({ question_id: questionId, statement_index: statementIndex, answer }),
   })
   return parseJsonOrThrow(response)

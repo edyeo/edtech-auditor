@@ -14,4 +14,7 @@ function safeOrigin(value: string): string | undefined {
 }
 
 /** Supabase Auth client; null when the project URL / public key are not configured for this build. */
-export const supabase: SupabaseClient | null = url && publishableKey ? createClient(url, publishableKey) : null
+// PKCE returns the OAuth result as `?code=...`. The default flow puts tokens in the `#` fragment, which this app
+// already uses for its routes (#/ox, #/questions).
+export const supabase: SupabaseClient | null =
+  url && publishableKey ? createClient(url, publishableKey, { auth: { flowType: 'pkce' } }) : null

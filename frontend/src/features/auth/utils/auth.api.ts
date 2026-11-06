@@ -1,22 +1,15 @@
-import { authErrorMessage } from '@/features/auth/utils/auth-error-message'
 import { supabase } from '@/lib/supabase-client'
 
-export type AuthResult = { ok: true; needsEmailConfirmation: boolean } | { ok: false; message: string }
+export type AuthResult = { ok: true } | { ok: false; message: string }
 
-const NOT_CONFIGURED: AuthResult = { ok: false, message: '로그인 설정이 없는 빌드입니다.' }
-
-export async function signInWithEmail(email: string, password: string): Promise<AuthResult> {
-  if (!supabase) return NOT_CONFIGURED
-  const { error } = await supabase.auth.signInWithPassword({ email, password })
-  return error ? { ok: false, message: authErrorMessage(error.code) } : { ok: true, needsEmailConfirmation: false }
-}
-
-export async function signUpWithEmail(email: string, password: string): Promise<AuthResult> {
-  if (!supabase) return NOT_CONFIGURED
-  const { data, error } = await supabase.auth.signUp({ email, password })
-  if (error) return { ok: false, message: authErrorMessage(error.code) }
-  // With "Confirm email" on, Supabase creates the user but returns no session until the link is opened.
-  return { ok: true, needsEmailConfirmation: data.session === null }
+/** Redirects the browser to Google; the session is created when Google sends the learner back. */
+export async function signInWithGoogle(): Promise<AuthResult> {
+  if (!supabase) return { ok: false, message: '로그인 설정이 없는 빌드입니다.' }
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: window.location.origin },
+  })
+  return error ? { ok: false, message: '로그인을 시작하지 못했습니다. 잠시 후 다시 시도해 주세요.' } : { ok: true }
 }
 
 export async function signOutOfAccount(): Promise<void> {

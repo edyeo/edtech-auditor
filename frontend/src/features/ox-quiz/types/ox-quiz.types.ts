@@ -33,8 +33,14 @@ export type OxResult = {
   isCorrect: boolean
 }
 
+/** random: reshuffled on demand; order: the exam's question order, so a statement is easy to find again. */
+export type OxSort = 'random' | 'order'
+
 export type OxFilter = {
   year: number | 'all'
   subject: string | 'all'
   query: string
+  markedOnly: boolean
+  wrongOnly: boolean
+  sort: OxSort
 }

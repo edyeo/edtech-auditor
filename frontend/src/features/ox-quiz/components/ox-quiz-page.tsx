@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { NativeSelect } from '@/components/ui/native-select'
 import { OxStatementRow } from '@/features/ox-quiz/components/ox-statement-row'
+import type { OxSort } from '@/features/ox-quiz/types/ox-quiz.types'
 import { useOxQuiz } from '@/features/ox-quiz/utils/use-ox-quiz'
 
 export function OxQuizPage() {
@@ -21,9 +22,11 @@ export function OxQuizPage() {
           <Badge variant="secondary">
             정답 {quiz.correctCount} / {quiz.answeredCount}
           </Badge>
-          <Button type="button" variant="outline" className="h-10 md:h-8" onClick={quiz.reshuffle}>
-            다시 섞기
-          </Button>
+          {quiz.filter.sort === 'random' && (
+            <Button type="button" variant="outline" className="h-10 md:h-8" onClick={quiz.reshuffle}>
+              다시 섞기
+            </Button>
+          )}
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
@@ -59,6 +62,14 @@ export function OxQuizPage() {
               ))}
             </NativeSelect>
           )}
+          <NativeSelect
+            aria-label="정렬"
+            value={quiz.filter.sort}
+            onChange={(e) => quiz.updateFilter({ sort: e.target.value as OxSort })}
+          >
+            <option value="random">랜덤 순서</option>
+            <option value="order">문제 순서</option>
+          </NativeSelect>
           <Input
             type="search"
             aria-label="검색"
@@ -67,6 +78,24 @@ export function OxQuizPage() {
             value={quiz.filter.query}
             onChange={(e) => quiz.updateFilter({ query: e.target.value })}
           />
+        </div>
+        <div className="flex flex-wrap gap-4 text-sm">
+          <label className="flex min-h-10 items-center gap-1.5 md:min-h-0">
+            <input
+              type="checkbox"
+              checked={quiz.filter.markedOnly}
+              onChange={(e) => quiz.updateFilter({ markedOnly: e.target.checked })}
+            />
+            마킹만
+          </label>
+          <label className="flex min-h-10 items-center gap-1.5 md:min-h-0">
+            <input
+              type="checkbox"
+              checked={quiz.filter.wrongOnly}
+              onChange={(e) => quiz.updateFilter({ wrongOnly: e.target.checked })}
+            />
+            틀린 적 있는 문제만
+          </label>
         </div>
 
         {quiz.answerError && (
@@ -78,7 +107,11 @@ export function OxQuizPage() {
         {quiz.isLoading ? (
           <p className="py-6 text-center text-sm text-muted-foreground">문제를 불러오는 중...</p>
         ) : quiz.visibleItems.length === 0 ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">조건에 맞는 보기가 없습니다.</p>
+          <p className="py-6 text-center text-sm text-muted-foreground">
+            {quiz.filter.markedOnly && !quiz.hasMarks
+              ? '아직 마킹한 문항이 없습니다. 보기 오른쪽 위의 마커 + 버튼으로 표시해 보세요.'
+              : '조건에 맞는 보기가 없습니다.'}
+          </p>
         ) : (
           <ul>
             {quiz.visibleItems.map((item) => (

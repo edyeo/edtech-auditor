@@ -5,6 +5,8 @@ import { DEFAULT_OX_FILTER, filterOxItems } from '@/features/ox-quiz/utils/filte
 import { checkOxStatement, fetchOxStatements } from '@/features/ox-quiz/utils/ox-quiz.api'
 import { shuffleItems } from '@/features/ox-quiz/utils/shuffle-items'
 import { useQuestionBank } from '@/lib/use-question-bank'
+import { useQuestionMarks } from '@/lib/use-question-marks'
+import { useQuestionStats } from '@/lib/use-question-stats'
 
 const PAGE_SIZE = 20
 
@@ -21,6 +23,8 @@ function loadStatements(): Promise<OxStatement[]> {
 
 export function useOxQuiz() {
   const bank = useQuestionBank()
+  const { markedIds } = useQuestionMarks()
+  const stats = useQuestionStats()
   const [statements, setStatements] = useState<OxStatement[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [reshuffled, setReshuffled] = useState<OxItem[] | null>(null)
@@ -46,8 +50,13 @@ export function useOxQuiz() {
     [bank.questions, statements],
   )
   const initialOrder = useMemo(() => shuffleItems(items), [items])
-  const ordered = reshuffled ?? initialOrder
-  const filtered = useMemo(() => filterOxItems(ordered, filter), [ordered, filter])
+  // The server lists statements by question, so `items` itself is the question order.
+  const ordered = filter.sort === 'order' ? items : (reshuffled ?? initialOrder)
+  const markedSet = useMemo(() => new Set(markedIds), [markedIds])
+  const filtered = useMemo(
+    () => filterOxItems(ordered, filter, markedSet, stats),
+    [ordered, filter, markedSet, stats],
+  )
 
   const years = useMemo(() => [...new Set(items.map((item) => item.question.year))].sort((a, b) => b - a), [items])
   const subjects = useMemo(() => [...new Set(items.map((item) => item.question.subject))], [items])
@@ -96,6 +105,7 @@ export function useOxQuiz() {
     error: bank.error ?? loadError,
     years,
     subjects,
+    hasMarks: markedIds.length > 0,
     filter,
     updateFilter,
     totalCount: filtered.length,

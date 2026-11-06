@@ -1,6 +1,8 @@
 import asyncio
 import uuid
 
+from api.tests.conftest import access_token
+
 # 2021-22-01: choices 21.9 / 23.3 / 23.8 / 26.4 -> correct is index 1.
 Q1, Q2, Q94 = "2021-22-01", "2021-22-02", "2021-22-94"  # Q94 is multiple-answer (indexes 1 and 2)
 
@@ -13,9 +15,27 @@ async def attempt(client, learner, question_id, selected):
     return r.json()
 
 
-async def test_learner_id_is_required(client):
-    assert (await client.get("/api/learner/state")).status_code == 400
-    assert (await client.get("/api/learner/state", headers={"X-Learner-Id": "nope"})).status_code == 400
+async def test_sign_in_is_required(client):
+    assert (await client.get("/api/learner/state")).status_code == 401
+    assert (await client.get("/api/learner/state", headers={"Authorization": "Bearer nope"})).status_code == 401
+    legacy_header = {"X-Learner-Id": str(uuid.uuid4())}  # the pre-account identity no longer works
+    assert (await client.get("/api/learner/state", headers=legacy_header)).status_code == 401
+
+
+async def test_each_account_sees_only_its_own_data(client):
+    alice = {"Authorization": f"Bearer {access_token()}"}
+    bob = {"Authorization": f"Bearer {access_token()}"}
+    assert (await client.put(f"/api/learner/marks/{Q1}", headers=alice, json={"count": 2})).status_code == 200
+    assert (await client.get("/api/learner/state", headers=alice)).json()["marks"][Q1]["count"] == 2
+    assert (await client.get("/api/learner/state", headers=bob)).json()["marks"] == {}
+
+
+async def test_the_same_account_keeps_its_data_across_tokens(client):
+    user = uuid.uuid4()
+    first = {"Authorization": f"Bearer {access_token(user)}"}
+    await client.put(f"/api/learner/marks/{Q1}", headers=first, json={"count": 3})
+    later = {"Authorization": f"Bearer {access_token(user)}"}  # e.g. after a token refresh or on another device
+    assert (await client.get("/api/learner/state", headers=later)).json()["marks"][Q1]["count"] == 3
 
 
 async def test_every_wrong_answer_adds_a_marker(client, learner):

@@ -1,4 +1,4 @@
-import { getLearnerId } from '@/lib/learner-id'
+import { clearSession, getAccessToken } from '@/lib/auth-token'
 import type {
   MiniTestRecord,
   QuestionMark,
@@ -20,10 +20,17 @@ export class LearnerApiError extends Error {
 }
 
 async function learnerRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const token = await getAccessToken()
+  if (!token) throw new LearnerApiError(401, '로그인이 필요합니다')
   const response = await fetch(`/api/learner${path}`, {
     ...init,
-    headers: { 'Content-Type': 'application/json', 'X-Learner-Id': getLearnerId() },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
   })
+  if (response.status === 401) {
+    // The server no longer accepts this session (revoked or expired for good): back to the login page.
+    await clearSession()
+    throw new LearnerApiError(401, '로그인이 만료되었습니다')
+  }
   if (!response.ok) throw new LearnerApiError(response.status, `요청이 실패했습니다 (${response.status})`)
   return response.status === 204 ? (undefined as T) : ((await response.json()) as T)
 }

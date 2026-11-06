@@ -3,16 +3,31 @@
 Requires the compose `db` service (published on 127.0.0.1:5432) and POSTGRES_PASSWORD in .env.
 """
 import os
+import time
 import uuid
 from pathlib import Path
 
 import asyncpg
 import httpx
+import jwt
 import pytest
 import pytest_asyncio
 
 TEST_DB = "edtech_test"
 ADMIN_TOKEN = "test-admin-token"
+JWT_SECRET = "test-supabase-jwt-secret-with-at-least-32-bytes"
+
+
+def access_token(user_id: uuid.UUID | None = None, **overrides) -> str:
+    """A Supabase-style access token signed with the test secret (HS256)."""
+    claims = {
+        "sub": str(user_id or uuid.uuid4()),
+        "aud": "authenticated",
+        "role": "authenticated",
+        "exp": int(time.time()) + 3600,
+        **overrides,
+    }
+    return jwt.encode({k: v for k, v in claims.items() if v is not None}, JWT_SECRET, algorithm="HS256")
 
 
 def _password() -> str:
@@ -30,6 +45,8 @@ async def database():
     await admin.execute(f"CREATE DATABASE {TEST_DB}")
     os.environ["DATABASE_URL"] = f"{base}/{TEST_DB}"
     os.environ["ADMIN_TOKEN"] = ADMIN_TOKEN
+    os.environ["SUPABASE_JWT_SECRET"] = JWT_SECRET
+    os.environ.pop("SUPABASE_URL", None)
 
     from api.db.migrate import migrate
 
@@ -49,8 +66,8 @@ async def client(database):
 
 @pytest.fixture
 def learner() -> dict[str, str]:
-    """A fresh anonymous learner per test, so tests never see each other's data."""
-    return {"X-Learner-Id": str(uuid.uuid4())}
+    """A fresh signed-in user per test, so tests never see each other's data."""
+    return {"Authorization": f"Bearer {access_token()}"}
 
 
 @pytest.fixture

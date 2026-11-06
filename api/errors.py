@@ -18,8 +18,16 @@ class DatabaseNotConfiguredError(Exception):
     """Raised when a feature needs Postgres but no DATABASE_URL/POSTGRES_URL is set."""
 
 
-class InvalidLearnerError(Exception):
-    """Raised when the X-Learner-Id header is missing or not a UUID."""
+class InvalidTokenError(Exception):
+    """Raised when the bearer token is missing, malformed, expired or not signed by the Supabase project."""
+
+
+class AuthNotConfiguredError(Exception):
+    """Raised when a token must be verified but SUPABASE_URL / SUPABASE_JWT_SECRET is not set."""
+
+
+class AuthUnavailableError(Exception):
+    """Raised when the key set needed to verify a token could not be fetched from Supabase."""
 
 
 class ExplanationUnavailableError(Exception):

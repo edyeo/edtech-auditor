@@ -8,7 +8,7 @@ import {
   putMark,
   putReview,
 } from '@/lib/learner.api'
-import { learnerStore } from '@/lib/learner-state.store'
+import { INITIAL_LEARNER_STATE, learnerStore } from '@/lib/learner-state.store'
 import type {
   MiniTestRecord,
   QuestionMark,
@@ -19,6 +19,11 @@ import type { AnswerCheckResponse } from '@/types/question.types'
 
 function notify(message: string): void {
   learnerStore.update((state) => ({ ...state, notice: message }))
+}
+
+/** Forget the previous account's data (sign-out / account switch) so it never shows for the next user. */
+export function resetLearnerState(): void {
+  learnerStore.update(() => INITIAL_LEARNER_STATE)
 }
 
 export function dismissLearnerNotice(): void {

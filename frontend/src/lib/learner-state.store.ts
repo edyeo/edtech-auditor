@@ -23,8 +23,7 @@ export type LearnerState = {
   history: MiniTestRecord[]
 }
 
-/** Server-owned learner data (marks, stats, review boxes, mini test history), kept in memory. */
-export const learnerStore = createStore<LearnerState>({
+export const INITIAL_LEARNER_STATE: LearnerState = {
   status: 'loading',
   error: null,
   notice: null,
@@ -34,4 +33,7 @@ export const learnerStore = createStore<LearnerState>({
   stats: {},
   review: {},
   history: [],
-})
+}
+
+/** Server-owned learner data (marks, stats, review boxes, mini test history), kept in memory. */
+export const learnerStore = createStore<LearnerState>(INITIAL_LEARNER_STATE)

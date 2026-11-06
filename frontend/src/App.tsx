@@ -1,4 +1,5 @@
 import { AdminPage } from '@/features/admin'
+import { AccountBar, AuthGate } from '@/features/auth'
 import { StudyListPage } from '@/features/exam'
 import { MiniTestPage } from '@/features/mini-test'
 import { OxQuizPage } from '@/features/ox-quiz'
@@ -109,12 +110,15 @@ function App() {
           </a>
         ))}
       </nav>
+      <AccountBar />
       <NoticeBanner />
-      {/* The admin page talks to /api/admin only, so it stays usable even if the learner data fails to load. */}
+      {/* The admin page talks to /api/admin only, so it needs neither a sign-in nor the learner data. */}
       {path === '/admin' ? (
         renderPage(path, new URLSearchParams(search))
       ) : (
-        <LearnerGate>{renderPage(path, new URLSearchParams(search))}</LearnerGate>
+        <AuthGate>
+          <LearnerGate>{renderPage(path, new URLSearchParams(search))}</LearnerGate>
+        </AuthGate>
       )}
     </main>
   )

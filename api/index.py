@@ -12,8 +12,10 @@ from api.errors import (
     AdminDisabledError,
     DatabaseNotConfiguredError,
     ExplanationUnavailableError,
+    AuthNotConfiguredError,
+    AuthUnavailableError,
     InvalidAnswerError,
-    InvalidLearnerError,
+    InvalidTokenError,
     QuestionNotFoundError,
 )
 from api.routers import admin, explain, learner, ox, questions
@@ -42,7 +44,9 @@ _DOMAIN_ERRORS: dict[type[Exception], tuple[int, str]] = {
     InvalidAnswerError: (422, "answer references a choice the question does not have"),
     QuestionNotFoundError: (404, "question not found"),
     ExplanationUnavailableError: (502, "explanation provider is unavailable"),
-    InvalidLearnerError: (400, "X-Learner-Id header must be a UUID"),
+    InvalidTokenError: (401, "sign in required"),
+    AuthNotConfiguredError: (503, "auth is not configured"),
+    AuthUnavailableError: (503, "auth is unavailable"),
     DatabaseNotConfiguredError: (503, "database is not configured"),
     SQLAlchemyError: (503, "database is unavailable"),
 }

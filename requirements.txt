@@ -4,3 +4,4 @@ openai>=1.50
 uvicorn[standard]>=0.30
 sqlalchemy[asyncio]>=2.0.30
 asyncpg>=0.29
+PyJWT[crypto]>=2.9

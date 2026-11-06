@@ -38,7 +38,7 @@ def _resolve_provider() -> LLMProvider:
 logger = logging.getLogger(__name__)
 
 
-def _content_hash(question: Question) -> str:
+def content_hash(question: Question) -> str:
     """Identifies what an explanation was written for: stem, choices and the (corrected) answer key."""
     payload = {
         "stem": question.stem,
@@ -67,20 +67,20 @@ class ExplainService:
 
         # `resolve` already opened this session's transaction; the advisory lock below lives in it
         # until the commit at the end.
-        content_hash = _content_hash(question)
+        digest = content_hash(question)
         store = ExplanationRepository(session)
-        if (cached := await store.get(question_id, content_hash)) is not None:
+        if (cached := await store.get(question_id, digest)) is not None:
             return cached
 
         # Single-flight: concurrent requests for the same question queue here, and every request
         # after the first finds the stored text on the re-check (READ COMMITTED sees its commit).
-        await store.lock(question_id, content_hash)
-        if (cached := await store.get(question_id, content_hash)) is not None:
+        await store.lock(question_id, digest)
+        if (cached := await store.get(question_id, digest)) is not None:
             return cached
 
         explanation = await self._generate(provider, question, answer_indexes)
         if provider.persistable:
-            await store.add(question_id, content_hash, explanation, provider.name)
+            await store.add(question_id, digest, explanation, provider.name)
         await session.commit()
         return explanation
 

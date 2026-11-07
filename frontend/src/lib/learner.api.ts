@@ -57,7 +57,7 @@ type WireTerm = {
 }
 type WireOxStats = { attempts: number; wrong: number; last_attempt_at: string }
 type WireStats = { attempts: number; wrong: number; streak: number; last_wrong_at: string | null }
-type WireReview = {
+export type WireReview = {
   box_level: number
   due_at: string
   last_confidence: ReviewState['lastConfidence']
@@ -104,7 +104,7 @@ const toReview = (r: WireReview): ReviewState => ({
   attempts: r.attempts,
   overconfidentMiss: r.overconfident_miss,
 })
-const fromReview = (r: ReviewState): WireReview => ({
+export const fromReview = (r: ReviewState): WireReview => ({
   box_level: r.boxLevel,
   due_at: r.dueAt,
   last_confidence: r.lastConfidence,

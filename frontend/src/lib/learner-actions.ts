@@ -1,3 +1,5 @@
+import { gradeChoice, loadAnswerKey } from '@/lib/answer-key'
+import { enqueueAttempt, enqueueReview, flushAttemptQueue, setQueueOwner } from '@/lib/attempt-queue'
 import { importLocalLearnerDataOnce } from '@/lib/import-local-learner-data'
 import {
   LearnerApiError,
@@ -6,6 +8,7 @@ import {
   deleteOxMark,
   deleteVocabularyImage,
   deleteVocabularyTerm,
+  fromReview,
   fetchLearnerState,
   fetchMiniTests,
   postAttempt,
@@ -16,7 +19,6 @@ import {
   putChoiceMark,
   putMark,
   putOxMark,
-  putReview,
 } from '@/lib/learner.api'
 import { INITIAL_LEARNER_STATE, learnerStore, type LearnerState } from '@/lib/learner-state.store'
 import type {
@@ -58,8 +60,12 @@ async function loadLearnerState(): Promise<void> {
   learnerStore.update((state) => ({ ...state, status: 'loading', error: null }))
   try {
     await importLocalLearnerDataOnce()
+    // Answers left over from an earlier visit are sent first, so the counts loaded below include them.
+    await setQueueOwner()
+    await flushAttemptQueue()
     const [state, history] = await Promise.all([fetchLearnerState(), fetchMiniTests()])
     learnerStore.update((current) => ({ ...current, ...state, history, status: 'ready', error: null }))
+    void loadAnswerKey().catch(() => undefined) // warm up, so the first grading is instant
   } catch {
     learnerStore.update((state) => ({
       ...state,
@@ -274,8 +280,54 @@ export async function removeVocabularyTerm(term: string): Promise<void> {
   }
 }
 
-/** Grade + record one answer on the server (updates stats and may auto-mark). Throws on failure. */
+/** Counts a graded answer in the page right away; the server gets it in the next batch. */
+function countAnswerLocally(questionId: string, isCorrect: boolean): void {
+  const now = new Date().toISOString()
+  learnerStore.update((s) => {
+    const before = s.stats[questionId]
+    const stats = {
+      attempts: (before?.attempts ?? 0) + 1,
+      wrong: (before?.wrong ?? 0) + (isCorrect ? 0 : 1),
+      streak: isCorrect ? 0 : (before?.streak ?? 0) + 1,
+      lastWrongAt: isCorrect ? (before?.lastWrongAt ?? null) : now,
+    }
+    const mark = s.marks[questionId]
+    // Every wrong answer adds a marker (up to the maximum), as the server does.
+    const marks = isCorrect
+      ? s.marks
+      : {
+          ...s.marks,
+          [questionId]: mark
+            ? { ...mark, count: Math.min(mark.count + 1, s.maxMarkCount) }
+            : { markedAt: now, source: 'auto' as const, count: 1 },
+        }
+    return { ...s, stats: { ...s.stats, [questionId]: stats }, marks }
+  })
+}
+
+/**
+ * Grade one answer against the answer key in the browser and count it; the server receives it in a batch.
+ * Falls back to grading on the server when the key could not be loaded. Throws when neither works.
+ */
 export async function submitAttempt(
+  questionId: string,
+  selectedIndex: number,
+): Promise<{ check: AnswerCheckResponse; autoMarked: boolean }> {
+  let check: AnswerCheckResponse | null = null
+  try {
+    check = gradeChoice(await loadAnswerKey(), questionId, selectedIndex)
+  } catch {
+    check = null
+  }
+  if (!check) return submitAttemptOnServer(questionId, selectedIndex)
+
+  countAnswerLocally(questionId, check.is_correct)
+  enqueueAttempt({ kind: 'question', id: crypto.randomUUID(), question_id: questionId, selected_index: selectedIndex })
+  return { check, autoMarked: !check.is_correct }
+}
+
+/** The earlier path: the server grades and counts in one request. */
+async function submitAttemptOnServer(
   questionId: string,
   selectedIndex: number,
 ): Promise<{ check: AnswerCheckResponse; autoMarked: boolean }> {
@@ -288,19 +340,44 @@ export async function submitAttempt(
   return { check: result.check, autoMarked: result.autoMarked }
 }
 
+/**
+ * Grade one O/X answer against the key in the browser and count it; the server receives it in a batch.
+ * Throws when the answer key cannot be loaded.
+ */
+export async function submitOxAnswer(
+  questionId: string,
+  statementIndex: number,
+  answer: 'O' | 'X',
+): Promise<{ isTrue: boolean; isCorrect: boolean }> {
+  const statementKey = `${questionId}#${statementIndex}`
+  const isTrue = (await loadAnswerKey()).ox[statementKey]
+  if (isTrue === undefined) throw new Error('unknown O/X statement')
+  const isCorrect = (answer === 'O') === isTrue
+  const before = learnerStore.getSnapshot().oxStats[statementKey]
+  recordOxStats(statementKey, {
+    attempts: (before?.attempts ?? 0) + 1,
+    wrong: (before?.wrong ?? 0) + (isCorrect ? 0 : 1),
+    lastAttemptAt: new Date().toISOString(),
+  })
+  enqueueAttempt({
+    kind: 'ox',
+    id: crypto.randomUUID(),
+    question_id: questionId,
+    statement_index: statementIndex,
+    answer,
+  })
+  return { isTrue, isCorrect }
+}
+
 /** Store the new answer counts of an O/X statement (the server returns them with the verdict). */
 export function recordOxStats(statementKey: string, stats: OxStats): void {
   learnerStore.update((s) => ({ ...s, oxStats: { ...s.oxStats, [statementKey]: stats } }))
 }
 
-/** Save a question's review box. Optimistic; a failed save only shows a notice. */
-export async function saveReviewState(questionId: string, state: ReviewState): Promise<void> {
+/** Save a question's review box: shown at once, sent with the next batch of answers. */
+export function saveReviewState(questionId: string, state: ReviewState): void {
   learnerStore.update((s) => ({ ...s, review: { ...s.review, [questionId]: state } }))
-  try {
-    await putReview(questionId, state)
-  } catch {
-    notify('복습 일정을 저장하지 못했습니다. 이 문제의 복습 간격이 반영되지 않았을 수 있어요.')
-  }
+  enqueueReview(questionId, fromReview(state))
 }
 
 /** Grade + record a whole mini test on the server. Throws on failure (nothing is recorded then). */

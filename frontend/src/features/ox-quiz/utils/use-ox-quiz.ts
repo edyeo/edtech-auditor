@@ -2,10 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { OxAnswer, OxFilter, OxItem, OxResult, OxStatement } from '@/features/ox-quiz/types/ox-quiz.types'
 import { buildOxItems } from '@/features/ox-quiz/utils/build-ox-items'
 import { DEFAULT_OX_FILTER, filterOxItems } from '@/features/ox-quiz/utils/filter-ox-items'
-import { checkOxStatement, fetchOxStatements } from '@/features/ox-quiz/utils/ox-quiz.api'
+import { fetchOxStatements } from '@/features/ox-quiz/utils/ox-quiz.api'
 import { shuffleItems } from '@/features/ox-quiz/utils/shuffle-items'
-import { recordOxStats } from '@/lib/learner-actions'
-import { toOxStats } from '@/lib/learner.api'
+import { submitOxAnswer } from '@/lib/learner-actions'
 import { useOxStats } from '@/lib/use-ox-stats'
 import { useQuestionBank } from '@/lib/use-question-bank'
 import { useOxStatementMarks } from '@/lib/use-ox-statement-marks'
@@ -81,12 +80,12 @@ export function useOxQuiz() {
     setAnswerError(null)
     setPendingKeys((current) => new Set(current).add(item.key))
     try {
-      const verdict = await checkOxStatement(item.question.id, item.statementIndex, choice)
-      if (verdict.stats) recordOxStats(item.key, toOxStats(verdict.stats))
+      // Graded in the browser against the answer key; the server counts it with the next batch.
+      const verdict = await submitOxAnswer(item.question.id, item.statementIndex, choice)
       if (round !== roundRef.current) return
       setResults((current) => ({
         ...current,
-        [item.key]: { answer: choice, isTrue: verdict.is_true, isCorrect: verdict.is_correct },
+        [item.key]: { answer: choice, isTrue: verdict.isTrue, isCorrect: verdict.isCorrect },
       }))
     } catch {
       if (round === roundRef.current) setAnswerError('채점하지 못했습니다. 잠시 후 다시 시도해 주세요.')

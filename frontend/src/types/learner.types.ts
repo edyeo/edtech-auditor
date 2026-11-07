@@ -21,13 +21,19 @@ export type OxStats = { attempts: number; wrong: number; lastAttemptAt: string }
 /** Keyed "question_id#statement_index". */
 export type OxStatsMap = Record<string, OxStats>
 
-/** A word the learner saved from the questions to study later. */
+export type VocabularyImage = { id: string; contentType: string; size: number }
+
+/** A word the learner saved from the questions (or wrote by hand) to study later: a small concept note. */
 export type VocabularyTerm = {
   term: string
+  /** The note, written in Markdown. */
   memo: string
   studied: boolean
   /** The question the word was first selected in. */
   sourceQuestionId: string | null
+  /** Subject the note was filed under by hand; null means "the section of the source question". */
+  section: string | null
+  images: VocabularyImage[]
   createdAt: string
   updatedAt: string
 }

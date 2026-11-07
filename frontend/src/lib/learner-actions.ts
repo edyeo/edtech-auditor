@@ -3,12 +3,14 @@ import {
   LearnerApiError,
   deleteMark,
   deleteOxMark,
+  deleteVocabularyImage,
   deleteVocabularyTerm,
   fetchLearnerState,
   fetchMiniTests,
   postAttempt,
   patchVocabularyTerm,
   postMiniTest,
+  postVocabularyImage,
   postVocabularyTerm,
   putMark,
   putOxMark,
@@ -21,7 +23,7 @@ import type {
   QuestionMark,
   QuestionMarkMap,
   ReviewState,
-  VocabularyTerm,
+  VocabularyImage,
 } from '@/types/learner.types'
 import { termKey } from '@/lib/vocabulary-term'
 import type { AnswerCheckResponse } from '@/types/question.types'
@@ -165,9 +167,13 @@ async function flushMarkCount(
 }
 
 /** Save a selected word. Resolves to false (with a notice) when it could not be saved. */
-export async function saveVocabularyTerm(term: string, sourceQuestionId: string | null): Promise<boolean> {
+export async function saveVocabularyTerm(
+  term: string,
+  sourceQuestionId: string | null,
+  section: string | null = null,
+): Promise<boolean> {
   try {
-    const saved = await postVocabularyTerm(term, sourceQuestionId)
+    const saved = await postVocabularyTerm(term, sourceQuestionId, section)
     learnerStore.update((s) => ({ ...s, vocabulary: { ...s.vocabulary, [termKey(saved.term)]: saved } }))
     return true
   } catch (error) {
@@ -180,17 +186,60 @@ export async function saveVocabularyTerm(term: string, sourceQuestionId: string 
 /** Change a saved word's memo or studied flag. Optimistic; a failed save restores the old values. */
 export async function updateVocabularyTerm(
   term: string,
-  change: Partial<Pick<VocabularyTerm, 'memo' | 'studied'>>,
+  change: { memo?: string; studied?: boolean; section?: string | null },
 ): Promise<void> {
   const key = termKey(term)
   const before = learnerStore.getSnapshot().vocabulary[key]
   if (!before) return
   learnerStore.update((s) => ({ ...s, vocabulary: { ...s.vocabulary, [key]: { ...before, ...change } } }))
   try {
-    await patchVocabularyTerm(before.term, change)
+    // An empty section clears it on the server.
+    await patchVocabularyTerm(before.term, { ...change, section: change.section === undefined ? undefined : (change.section ?? '') })
   } catch {
     learnerStore.update((s) => (s.vocabulary[key] ? { ...s, vocabulary: { ...s.vocabulary, [key]: before } } : s))
     notify('단어장을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.')
+  }
+}
+
+/** Compressed upload of a picture for a note. Resolves to the new image, or null (with a notice) on failure. */
+export async function addVocabularyImage(term: string, image: Blob): Promise<VocabularyImage | null> {
+  const key = termKey(term)
+  try {
+    const saved = await postVocabularyImage(learnerStore.getSnapshot().vocabulary[key]?.term ?? term, image)
+    learnerStore.update((s) =>
+      s.vocabulary[key]
+        ? { ...s, vocabulary: { ...s.vocabulary, [key]: { ...s.vocabulary[key], images: [...s.vocabulary[key].images, saved] } } }
+        : s,
+    )
+    return saved
+  } catch (error) {
+    const status = error instanceof LearnerApiError ? error.status : 0
+    notify(
+      status === 409
+        ? '이미지는 노트당 3장, 전체 20MB까지 올릴 수 있습니다.'
+        : '이미지를 올리지 못했습니다. 잠시 후 다시 시도해 주세요.',
+    )
+    return null
+  }
+}
+
+export async function removeVocabularyImage(term: string, imageId: string): Promise<void> {
+  const key = termKey(term)
+  try {
+    await deleteVocabularyImage(imageId)
+    learnerStore.update((s) =>
+      s.vocabulary[key]
+        ? {
+            ...s,
+            vocabulary: {
+              ...s.vocabulary,
+              [key]: { ...s.vocabulary[key], images: s.vocabulary[key].images.filter((image) => image.id !== imageId) },
+            },
+          }
+        : s,
+    )
+  } catch {
+    notify('이미지를 지우지 못했습니다. 잠시 후 다시 시도해 주세요.')
   }
 }
 

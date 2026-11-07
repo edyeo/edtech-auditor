@@ -9,6 +9,7 @@ import type {
   QuestionStatsMap,
   ReviewState,
   ReviewStateMap,
+  VocabularyImage,
   VocabularyMap,
   VocabularyTerm,
 } from '@/types/learner.types'
@@ -42,11 +43,14 @@ async function learnerRequest<T>(path: string, init: RequestInit = {}): Promise<
 // ---- wire format (snake_case) <-> app types (camelCase) ---------------------------------------
 
 type WireMark = { marked_at: string; source: 'manual' | 'auto'; count: number }
+type WireImage = { id: string; content_type: string; size: number }
 type WireTerm = {
   term: string
   memo: string
   studied: boolean
   source_question_id: string | null
+  section: string | null
+  images: WireImage[]
   created_at: string
   updated_at: string
 }
@@ -73,11 +77,14 @@ export const toOxStats = (s: WireOxStats): OxStats => ({
   wrong: s.wrong,
   lastAttemptAt: s.last_attempt_at,
 })
+const toImage = (i: WireImage): VocabularyImage => ({ id: i.id, contentType: i.content_type, size: i.size })
 const toTerm = (t: WireTerm): VocabularyTerm => ({
   term: t.term,
   memo: t.memo,
   studied: t.studied,
   sourceQuestionId: t.source_question_id,
+  section: t.section,
+  images: t.images.map(toImage),
   createdAt: t.created_at,
   updatedAt: t.updated_at,
 })
@@ -185,18 +192,22 @@ export function deleteOxMark(statementKey: string): Promise<void> {
 }
 
 /** Save a selected word; saving a word that already exists returns it unchanged. */
-export async function postVocabularyTerm(term: string, sourceQuestionId: string | null): Promise<VocabularyTerm> {
+export async function postVocabularyTerm(
+  term: string,
+  sourceQuestionId: string | null,
+  section: string | null = null,
+): Promise<VocabularyTerm> {
   return toTerm(
     await learnerRequest<WireTerm>('/vocabulary', {
       method: 'POST',
-      body: JSON.stringify({ term, source_question_id: sourceQuestionId }),
+      body: JSON.stringify({ term, source_question_id: sourceQuestionId, section }),
     }),
   )
 }
 
 export async function patchVocabularyTerm(
   term: string,
-  change: { memo?: string; studied?: boolean },
+  change: { memo?: string; studied?: boolean; section?: string },
 ): Promise<VocabularyTerm> {
   return toTerm(
     await learnerRequest<WireTerm>('/vocabulary', { method: 'PATCH', body: JSON.stringify({ term, ...change }) }),
@@ -205,6 +216,34 @@ export async function patchVocabularyTerm(
 
 export function deleteVocabularyTerm(term: string): Promise<void> {
   return learnerRequest(`/vocabulary?term=${encodeURIComponent(term)}`, { method: 'DELETE' })
+}
+
+/** Upload a (compressed) picture for a note; the body is the raw image, so this skips the JSON helper. */
+export async function postVocabularyImage(term: string, image: Blob): Promise<VocabularyImage> {
+  const token = await getAccessToken()
+  if (!token) throw new LearnerApiError(401, '로그인이 필요합니다')
+  const response = await fetch(`/api/learner/vocabulary/images?term=${encodeURIComponent(term)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': image.type, Authorization: `Bearer ${token}` },
+    body: image,
+  })
+  if (!response.ok) throw new LearnerApiError(response.status, `요청이 실패했습니다 (${response.status})`)
+  return toImage((await response.json()) as WireImage)
+}
+
+/** The picture's bytes; the endpoint needs the bearer token, so an <img src> cannot load it directly. */
+export async function fetchVocabularyImage(imageId: string): Promise<Blob> {
+  const token = await getAccessToken()
+  if (!token) throw new LearnerApiError(401, '로그인이 필요합니다')
+  const response = await fetch(`/api/learner/vocabulary/images/${imageId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!response.ok) throw new LearnerApiError(response.status, `요청이 실패했습니다 (${response.status})`)
+  return response.blob()
+}
+
+export function deleteVocabularyImage(imageId: string): Promise<void> {
+  return learnerRequest(`/vocabulary/images/${imageId}`, { method: 'DELETE' })
 }
 
 export async function postAttempt(

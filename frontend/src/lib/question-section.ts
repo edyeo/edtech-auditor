@@ -4,6 +4,9 @@ const MIXED_SUBJECT = '감리 및 사업관리'
 const AUDIT_SECTION = '감리'
 const PROJECT_MANAGEMENT_SECTION = '사업관리'
 
+/** Every section a note can belong to, in subject order. */
+export const QUESTION_SECTIONS = ['감리', '사업관리', '소프트웨어 공학', '데이터베이스', '시스템 구조', '보안'] as const
+
 function numberRange(first: number, last: number): ReadonlySet<number> {
   return new Set(Array.from({ length: last - first + 1 }, (_, offset) => first + offset))
 }

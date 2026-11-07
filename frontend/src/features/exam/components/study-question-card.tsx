@@ -17,7 +17,7 @@ export function StudyQuestionCard({ question }: StudyQuestionCardProps) {
   const stats = useQuestionStats()[question.id]
 
   return (
-    <Card className="w-full">
+    <Card data-question-id={question.id} className="w-full">
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-1">
           <CardTitle>

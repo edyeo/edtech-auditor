@@ -21,7 +21,7 @@ export function QuestionListRow({ question, stats, mark, expanded = false }: Que
   const autoMarkStreak = useAutoMarkStreak()
 
   return (
-    <li className="border-b py-2 last:border-b-0">
+    <li data-question-id={question.id} className="border-b py-2 last:border-b-0">
       <div className="flex items-start gap-1">
         <a
           href={`#/practice/${question.id}`}

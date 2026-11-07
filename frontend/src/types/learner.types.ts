@@ -21,6 +21,19 @@ export type OxStats = { attempts: number; wrong: number; lastAttemptAt: string }
 /** Keyed "question_id#statement_index". */
 export type OxStatsMap = Record<string, OxStats>
 
+/** A word the learner saved from the questions to study later. */
+export type VocabularyTerm = {
+  term: string
+  memo: string
+  studied: boolean
+  /** The question the word was first selected in. */
+  sourceQuestionId: string | null
+  createdAt: string
+  updatedAt: string
+}
+/** Keyed by the lower-cased term (see `termKey`). */
+export type VocabularyMap = Record<string, VocabularyTerm>
+
 export type ConfidenceLevel = 'low' | 'medium' | 'high'
 
 export type ReviewState = {

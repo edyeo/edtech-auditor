@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react'
 import { ExplanationPanel } from '@/components/explanation-panel'
+import { HighlightedText } from '@/components/highlighted-text'
 import { Button } from '@/components/ui/button'
 import { OxQuestionDetail } from '@/features/ox-quiz/components/ox-question-detail'
 import { OxStatementMarkerBox } from '@/features/ox-quiz/components/ox-statement-marker-box'
@@ -29,11 +30,13 @@ export function OxStatementRow({ item, result, isPending, stats, onAnswer }: OxS
   const explanation = useToggledExplanation(loadExplanation)
 
   return (
-    <li className="border-b py-3 last:border-b-0">
+    <li data-question-id={item.question.id} className="border-b py-3 last:border-b-0">
       {/* The markers of this statement only (the question's own are in "문제보기"). On narrow screens they
           sit on their own line above the statement, at the right. */}
       <div className="flex flex-col-reverse items-end gap-1 md:flex-row md:items-start md:justify-between md:gap-3">
-        <p className="w-full text-base leading-relaxed md:w-auto md:text-sm">{item.statement}</p>
+        <p data-term-source className="w-full text-base leading-relaxed md:w-auto md:text-sm">
+          <HighlightedText text={item.statement} />
+        </p>
         <div className="shrink-0">
           <OxStatementMarkerBox statementKey={item.key} />
         </div>

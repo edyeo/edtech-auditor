@@ -1,4 +1,5 @@
 import { cn } from 'cn'
+import { HighlightedText } from '@/components/highlighted-text'
 
 type QuestionChoiceListProps = {
   choices: string[]
@@ -28,7 +29,10 @@ export function QuestionChoiceList({
             <button
               type="button"
               disabled={isChecked}
-              onClick={() => onSelect(index)}
+              // Dragging over the text to select a word also ends in a click; that must not pick the choice.
+              onClick={() => {
+                if (!window.getSelection()?.toString()) onSelect(index)
+              }}
               className={cn(
                 'flex w-full items-start gap-3 rounded-lg border px-4 py-3 text-left text-base transition-colors md:text-sm',
                 'disabled:cursor-default',
@@ -41,7 +45,7 @@ export function QuestionChoiceList({
               )}
             >
               <span className="font-medium text-muted-foreground">{index + 1}.</span>
-              <span>{choice || '그림 참고'}</span>
+              <span data-term-source>{choice ? <HighlightedText text={choice} /> : '그림 참고'}</span>
             </button>
           </li>
         )

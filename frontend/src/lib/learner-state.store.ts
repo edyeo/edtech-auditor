@@ -5,6 +5,7 @@ import type {
   QuestionMarkMap,
   QuestionStatsMap,
   ReviewStateMap,
+  VocabularyMap,
 } from '@/types/learner.types'
 
 export type LearnerStatus = 'loading' | 'ready' | 'error'
@@ -21,6 +22,8 @@ export type LearnerState = {
   marks: QuestionMarkMap
   /** Markers on single O/X statements, keyed "question_id#statement_index"; separate from `marks`. */
   oxMarks: QuestionMarkMap
+  /** Words saved from the questions, highlighted wherever they appear. */
+  vocabulary: VocabularyMap
   stats: QuestionStatsMap
   oxStats: OxStatsMap
   review: ReviewStateMap
@@ -35,6 +38,7 @@ export const INITIAL_LEARNER_STATE: LearnerState = {
   maxMarkCount: 5,
   marks: {},
   oxMarks: {},
+  vocabulary: {},
   stats: {},
   oxStats: {},
   review: {},

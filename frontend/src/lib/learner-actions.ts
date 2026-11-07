@@ -1,11 +1,15 @@
 import { importLocalLearnerDataOnce } from '@/lib/import-local-learner-data'
 import {
+  LearnerApiError,
   deleteMark,
   deleteOxMark,
+  deleteVocabularyTerm,
   fetchLearnerState,
   fetchMiniTests,
   postAttempt,
+  patchVocabularyTerm,
   postMiniTest,
+  postVocabularyTerm,
   putMark,
   putOxMark,
   putReview,
@@ -17,7 +21,9 @@ import type {
   QuestionMark,
   QuestionMarkMap,
   ReviewState,
+  VocabularyTerm,
 } from '@/types/learner.types'
+import { termKey } from '@/lib/vocabulary-term'
 import type { AnswerCheckResponse } from '@/types/question.types'
 
 function notify(message: string): void {
@@ -155,6 +161,53 @@ async function flushMarkCount(
   } finally {
     wantedMarkCounts.delete(key)
     flushingMarks.delete(key)
+  }
+}
+
+/** Save a selected word. Resolves to false (with a notice) when it could not be saved. */
+export async function saveVocabularyTerm(term: string, sourceQuestionId: string | null): Promise<boolean> {
+  try {
+    const saved = await postVocabularyTerm(term, sourceQuestionId)
+    learnerStore.update((s) => ({ ...s, vocabulary: { ...s.vocabulary, [termKey(saved.term)]: saved } }))
+    return true
+  } catch (error) {
+    const isFull = error instanceof LearnerApiError && error.status === 409
+    notify(isFull ? '단어장이 가득 찼습니다. 쓰지 않는 단어를 지우고 다시 저장해 주세요.' : '단어를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.')
+    return false
+  }
+}
+
+/** Change a saved word's memo or studied flag. Optimistic; a failed save restores the old values. */
+export async function updateVocabularyTerm(
+  term: string,
+  change: Partial<Pick<VocabularyTerm, 'memo' | 'studied'>>,
+): Promise<void> {
+  const key = termKey(term)
+  const before = learnerStore.getSnapshot().vocabulary[key]
+  if (!before) return
+  learnerStore.update((s) => ({ ...s, vocabulary: { ...s.vocabulary, [key]: { ...before, ...change } } }))
+  try {
+    await patchVocabularyTerm(before.term, change)
+  } catch {
+    learnerStore.update((s) => (s.vocabulary[key] ? { ...s, vocabulary: { ...s.vocabulary, [key]: before } } : s))
+    notify('단어장을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.')
+  }
+}
+
+/** Remove a saved word. Optimistic; a failed delete brings it back. */
+export async function removeVocabularyTerm(term: string): Promise<void> {
+  const key = termKey(term)
+  const before = learnerStore.getSnapshot().vocabulary[key]
+  if (!before) return
+  learnerStore.update((s) => {
+    const { [key]: _removed, ...rest } = s.vocabulary
+    return { ...s, vocabulary: rest }
+  })
+  try {
+    await deleteVocabularyTerm(before.term)
+  } catch {
+    learnerStore.update((s) => ({ ...s, vocabulary: { ...s.vocabulary, [key]: before } }))
+    notify('단어를 지우지 못했습니다. 잠시 후 다시 시도해 주세요.')
   }
 }
 

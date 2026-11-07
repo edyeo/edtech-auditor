@@ -1,3 +1,4 @@
+import { HighlightedText } from '@/components/highlighted-text'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 
@@ -21,7 +22,9 @@ export function QuestionChoiceReadout({ choices, highlightIndex = null, highligh
           )}
         >
           <span className="font-medium text-muted-foreground">{index + 1}.</span>
-          <span className="min-w-0 flex-1">{choice || '그림 참고'}</span>
+          <span data-term-source className="min-w-0 flex-1">
+            {choice ? <HighlightedText text={choice} /> : '그림 참고'}
+          </span>
           {index === highlightIndex && highlightLabel && <Badge variant="secondary">{highlightLabel}</Badge>}
         </li>
       ))}

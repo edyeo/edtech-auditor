@@ -5,6 +5,7 @@ import { MiniTestPage } from '@/features/mini-test'
 import { OxQuizPage } from '@/features/ox-quiz'
 import type { MiniTestScope } from '@/features/mini-test/utils/build-mini-test'
 import { QuestionListPage } from '@/features/question-list'
+import { TermSelectionButton, VocabularyPage } from '@/features/vocabulary'
 import { WrongNotesPage } from '@/features/wrong-notes'
 import { Button } from '@/components/ui/button'
 import { dismissLearnerNotice } from '@/lib/learner-actions'
@@ -23,6 +24,7 @@ const NAV_ITEMS = [
   { href: '#/mini-test', path: '/mini-test', label: '미니 테스트' },
   { href: '#/ox', path: '/ox', label: 'O/X 퀴즈' },
   { href: '#/wrong-notes', path: '/wrong-notes', label: '오답노트' },
+  { href: '#/vocabulary', path: '/vocabulary', label: '단어장' },
   { href: '#/admin', path: '/admin', label: '관리' },
 ]
 
@@ -49,6 +51,8 @@ function renderPage(path: string, query: URLSearchParams) {
       return <OxQuizPage />
     case '/wrong-notes':
       return <WrongNotesPage />
+    case '/vocabulary':
+      return <VocabularyPage />
     case '/admin':
       return <AdminPage />
     default:
@@ -117,7 +121,10 @@ function App() {
         renderPage(path, new URLSearchParams(search))
       ) : (
         <AuthGate>
-          <LearnerGate>{renderPage(path, new URLSearchParams(search))}</LearnerGate>
+          <LearnerGate>
+            {renderPage(path, new URLSearchParams(search))}
+            <TermSelectionButton />
+          </LearnerGate>
         </AuthGate>
       )}
     </main>

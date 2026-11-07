@@ -1,3 +1,4 @@
+import { HighlightedText } from '@/components/highlighted-text'
 import { Separator } from '@/components/ui/separator'
 
 type ExplanationPanelProps = {
@@ -16,7 +17,11 @@ export function ExplanationPanel({ isLoading, error, explanation }: ExplanationP
       <Separator className="mb-3" />
       {isLoading && <p className="text-muted-foreground">해설을 불러오는 중...</p>}
       {error && <p className="text-red-500">{error}</p>}
-      {explanation && <p className="whitespace-pre-wrap leading-relaxed">{explanation}</p>}
+      {explanation && (
+        <p data-term-source className="whitespace-pre-wrap leading-relaxed">
+          <HighlightedText text={explanation} />
+        </p>
+      )}
     </div>
   )
 }

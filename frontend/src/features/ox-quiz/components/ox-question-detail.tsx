@@ -22,7 +22,7 @@ export function OxQuestionDetail({ id, question, choiceIndex }: OxQuestionDetail
   const answerExplanation = useToggledExplanation(loadAnswerExplanation)
 
   return (
-    <div id={id} className="mt-3 flex flex-col gap-3 rounded-lg border bg-muted/30 p-3">
+    <div id={id} data-question-id={question.id} className="mt-3 flex flex-col gap-3 rounded-lg border bg-muted/30 p-3">
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs text-muted-foreground">
           {question.year}년 {question.round}회 {question.number}번 · {getQuestionSection(question)}

@@ -9,6 +9,8 @@ import type {
   QuestionStatsMap,
   ReviewState,
   ReviewStateMap,
+  VocabularyMap,
+  VocabularyTerm,
 } from '@/types/learner.types'
 import type { AnswerCheckResponse } from '@/types/question.types'
 
@@ -40,6 +42,14 @@ async function learnerRequest<T>(path: string, init: RequestInit = {}): Promise<
 // ---- wire format (snake_case) <-> app types (camelCase) ---------------------------------------
 
 type WireMark = { marked_at: string; source: 'manual' | 'auto'; count: number }
+type WireTerm = {
+  term: string
+  memo: string
+  studied: boolean
+  source_question_id: string | null
+  created_at: string
+  updated_at: string
+}
 type WireOxStats = { attempts: number; wrong: number; last_attempt_at: string }
 type WireStats = { attempts: number; wrong: number; streak: number; last_wrong_at: string | null }
 type WireReview = {
@@ -62,6 +72,14 @@ export const toOxStats = (s: WireOxStats): OxStats => ({
   attempts: s.attempts,
   wrong: s.wrong,
   lastAttemptAt: s.last_attempt_at,
+})
+const toTerm = (t: WireTerm): VocabularyTerm => ({
+  term: t.term,
+  memo: t.memo,
+  studied: t.studied,
+  sourceQuestionId: t.source_question_id,
+  createdAt: t.created_at,
+  updatedAt: t.updated_at,
 })
 const toStats = (s: WireStats): QuestionStats => ({
   attempts: s.attempts,
@@ -106,6 +124,7 @@ export async function fetchLearnerState(): Promise<{
   maxMarkCount: number
   marks: QuestionMarkMap
   oxMarks: QuestionMarkMap
+  vocabulary: VocabularyMap
   stats: QuestionStatsMap
   oxStats: OxStatsMap
   review: ReviewStateMap
@@ -115,6 +134,7 @@ export async function fetchLearnerState(): Promise<{
     max_mark_count: number
     marks: Record<string, WireMark>
     ox_marks: Record<string, WireMark>
+    vocabulary: Record<string, WireTerm>
     stats: Record<string, WireStats>
     ox_stats: Record<string, WireOxStats>
     review: Record<string, WireReview>
@@ -124,6 +144,7 @@ export async function fetchLearnerState(): Promise<{
     maxMarkCount: raw.max_mark_count,
     marks: mapValues(raw.marks, toMark),
     oxMarks: mapValues(raw.ox_marks, toMark),
+    vocabulary: mapValues(raw.vocabulary, toTerm),
     stats: mapValues(raw.stats, toStats),
     oxStats: mapValues(raw.ox_stats, toOxStats),
     review: mapValues(raw.review, toReview),
@@ -161,6 +182,29 @@ export async function putOxMark(statementKey: string, count: number): Promise<Qu
 
 export function deleteOxMark(statementKey: string): Promise<void> {
   return learnerRequest(oxMarkPath(statementKey), { method: 'DELETE' })
+}
+
+/** Save a selected word; saving a word that already exists returns it unchanged. */
+export async function postVocabularyTerm(term: string, sourceQuestionId: string | null): Promise<VocabularyTerm> {
+  return toTerm(
+    await learnerRequest<WireTerm>('/vocabulary', {
+      method: 'POST',
+      body: JSON.stringify({ term, source_question_id: sourceQuestionId }),
+    }),
+  )
+}
+
+export async function patchVocabularyTerm(
+  term: string,
+  change: { memo?: string; studied?: boolean },
+): Promise<VocabularyTerm> {
+  return toTerm(
+    await learnerRequest<WireTerm>('/vocabulary', { method: 'PATCH', body: JSON.stringify({ term, ...change }) }),
+  )
+}
+
+export function deleteVocabularyTerm(term: string): Promise<void> {
+  return learnerRequest(`/vocabulary?term=${encodeURIComponent(term)}`, { method: 'DELETE' })
 }
 
 export async function postAttempt(

@@ -9,6 +9,7 @@ import { VocabularyImage } from '@/features/vocabulary/components/vocabulary-ima
 import { compressImage } from '@/lib/compress-image'
 import { addVocabularyImage, removeVocabularyImage, removeVocabularyTerm, updateVocabularyTerm } from '@/lib/learner-actions'
 import { QUESTION_SECTIONS } from '@/lib/question-section'
+import { cn } from '@/lib/utils'
 import type { VocabularyTerm } from '@/types/learner.types'
 
 const MAX_MEMO_LENGTH = 20000
@@ -63,10 +64,11 @@ export function VocabularyTermRow({ entry, sourceLabel, section }: VocabularyTer
   }
 
   return (
-    <li className="flex flex-col gap-2 border-b py-3 last:border-b-0">
+    <li className={cn('flex flex-col gap-2 border-b py-3 last:border-b-0', !entry.active && 'opacity-60')}>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <span className="text-base font-semibold">{entry.term}</span>
         {section && <Badge variant="outline">{section}</Badge>}
+        {!entry.active && <Badge variant="outline">비활성</Badge>}
         {entry.studied && <Badge variant="secondary">공부 완료</Badge>}
         {!isOpen && (entry.memo || entry.images.length > 0) && <Badge variant="outline">메모 있음</Badge>}
         {entry.sourceQuestionId && sourceLabel && (
@@ -97,6 +99,15 @@ export function VocabularyTermRow({ entry, sourceLabel, section }: VocabularyTer
             onClick={() => void updateVocabularyTerm(entry.term, { studied: !entry.studied })}
           >
             {entry.studied ? '다시 공부하기' : '공부 완료'}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            aria-pressed={!entry.active}
+            className="h-10 md:h-8"
+            onClick={() => void updateVocabularyTerm(entry.term, { active: !entry.active })}
+          >
+            {entry.active ? '비활성화' : '활성화'}
           </Button>
           <Button
             type="button"

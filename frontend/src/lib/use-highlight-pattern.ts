@@ -8,9 +8,10 @@ function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-/** One pattern for every saved word (longest first, any run of whitespace matches a space); null with no words. */
+/** One pattern for every active saved word (longest first, any run of whitespace matches a space); null with no words. */
 function buildPattern(vocabulary: VocabularyMap): RegExp | null {
   const terms = Object.values(vocabulary)
+    .filter((entry) => entry.active)
     .map((entry) => entry.term)
     .sort((a, b) => b.length - a.length)
   if (terms.length === 0) return null

@@ -1,3 +1,4 @@
+import { highlightTargetStore } from '@/lib/highlight-target.store'
 import { useHighlightPattern } from '@/lib/use-highlight-pattern'
 
 type HighlightedTextProps = {
@@ -16,9 +17,14 @@ export function HighlightedText({ text }: HighlightedTextProps) {
         index % 2 === 1 ? (
           <mark
             key={index}
+            data-term-mark
             title="눌러서 단어장에서 해제"
-            // Selecting the word brings up the save / un-save buttons for it.
-            onClick={(event) => window.getSelection()?.selectAllChildren(event.currentTarget)}
+            // A tap opens the word's buttons right under it (no text selection needed).
+            onClick={(event) => {
+              event.stopPropagation() // inside an answer choice, the tap must not also pick the choice
+              const box = event.currentTarget.getBoundingClientRect()
+              highlightTargetStore.set({ term: part, anchor: { x: box.left + box.width / 2, y: box.bottom } })
+            }}
             className="cursor-pointer rounded-sm bg-yellow-200 px-0.5 text-inherit"
           >
             {part}

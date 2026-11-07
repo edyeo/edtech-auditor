@@ -48,6 +48,7 @@ type WireTerm = {
   term: string
   memo: string
   studied: boolean
+  active: boolean
   source_question_id: string | null
   section: string | null
   images: WireImage[]
@@ -82,6 +83,7 @@ const toTerm = (t: WireTerm): VocabularyTerm => ({
   term: t.term,
   memo: t.memo,
   studied: t.studied,
+  active: t.active,
   sourceQuestionId: t.source_question_id,
   section: t.section,
   images: t.images.map(toImage),
@@ -227,7 +229,7 @@ export async function postVocabularyTerm(
 
 export async function patchVocabularyTerm(
   term: string,
-  change: { memo?: string; studied?: boolean; section?: string },
+  change: { memo?: string; studied?: boolean; active?: boolean; section?: string },
 ): Promise<VocabularyTerm> {
   return toTerm(
     await learnerRequest<WireTerm>('/vocabulary', { method: 'PATCH', body: JSON.stringify({ term, ...change }) }),

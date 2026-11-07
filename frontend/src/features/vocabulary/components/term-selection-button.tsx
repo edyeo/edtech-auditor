@@ -1,41 +1,72 @@
 import { BookmarkMinus, BookmarkPlus, Check } from 'lucide-react'
+import { useEffect, useSyncExternalStore } from 'react'
 import { Button } from '@/components/ui/button'
 import { useTermSelection } from '@/features/vocabulary/utils/use-term-selection'
-import { removeVocabularyTerm, saveVocabularyTerm } from '@/lib/learner-actions'
+import { highlightTargetStore } from '@/lib/highlight-target.store'
+import { saveVocabularyTerm, updateVocabularyTerm } from '@/lib/learner-actions'
 import { useVocabulary } from '@/lib/use-vocabulary'
 
 const BUTTON_WIDTH = 236
 const EDGE_GAP = 8
 
-/** Floats under the text the learner selected in a question, to save it to the vocabulary list. */
+/**
+ * Floats under a word in a question: the text the learner selected (to save it) or a highlighted word they tapped
+ * (to switch it off). Switching off keeps the note; saving the word again switches it back on.
+ */
 export function TermSelectionButton() {
   const selection = useTermSelection()
+  const tapped = useSyncExternalStore(highlightTargetStore.subscribe, highlightTargetStore.getSnapshot)
   const { find } = useVocabulary()
-  if (!selection) return null
 
-  const saved = find(selection.term)
+  // A tap anywhere but on the buttons or on a highlighted word closes the tapped word's buttons.
+  useEffect(() => {
+    if (!tapped) return
+    const close = () => highlightTargetStore.set(null)
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target instanceof Element ? event.target : null
+      if (!target?.closest('[data-term-popover], [data-term-mark]')) close()
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    window.addEventListener('scroll', close, true)
+    window.addEventListener('resize', close)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown)
+      window.removeEventListener('scroll', close, true)
+      window.removeEventListener('resize', close)
+    }
+  }, [tapped])
+
+  const subject = selection ?? (tapped ? { term: tapped.term, sourceQuestionId: null, anchor: tapped.anchor } : null)
+  if (!subject) return null
+
+  const saved = find(subject.term)
   const left = Math.min(
-    Math.max(selection.anchor.x - BUTTON_WIDTH / 2, EDGE_GAP),
+    Math.max(subject.anchor.x - BUTTON_WIDTH / 2, EDGE_GAP),
     window.innerWidth - BUTTON_WIDTH - EDGE_GAP,
   )
 
-  function unsave() {
-    if (!selection || !saved) return
-    // A note with content (memo or pictures) is not dropped by one stray tap.
-    const hasContent = saved.memo !== '' || saved.images.length > 0
-    if (hasContent && !window.confirm(`"${saved.term}" 노트에 적어 둔 내용도 함께 지워집니다. 단어장에서 뺄까요?`)) return
-    void removeVocabularyTerm(saved.term)
+  function done() {
+    highlightTargetStore.set(null)
     window.getSelection()?.removeAllRanges()
   }
 
-  async function save() {
-    if (!selection) return
-    if (await saveVocabularyTerm(selection.term, selection.sourceQuestionId)) window.getSelection()?.removeAllRanges()
+  function switchOff() {
+    if (!saved) return
+    void updateVocabularyTerm(saved.term, { active: false })
+    done()
   }
 
+  async function save() {
+    // The server switches a word that is already in the list (but off) back on and keeps its note.
+    if (await saveVocabularyTerm(subject!.term, subject!.sourceQuestionId)) done()
+  }
+
+  // Keep the text selection alive: a press on a button would otherwise clear it before the click.
+  const keepSelection = (event: React.MouseEvent) => event.preventDefault()
+
   return (
-    <div style={{ position: 'fixed', top: selection.anchor.y + 10, left, width: BUTTON_WIDTH }} className="z-50">
-      {saved ? (
+    <div data-term-popover style={{ position: 'fixed', top: subject.anchor.y + 10, left, width: BUTTON_WIDTH }} className="z-50">
+      {saved?.active ? (
         <div className="flex gap-1">
           <Button asChild size="sm" variant="secondary" className="h-10 flex-1 shadow-md md:h-8">
             <a href="#/vocabulary">
@@ -47,8 +78,8 @@ export function TermSelectionButton() {
             size="sm"
             variant="destructive"
             className="h-10 flex-1 shadow-md md:h-8"
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={unsave}
+            onMouseDown={keepSelection}
+            onClick={switchOff}
           >
             <BookmarkMinus /> 저장 해제
           </Button>
@@ -58,11 +89,10 @@ export function TermSelectionButton() {
           type="button"
           size="sm"
           className="h-10 w-full shadow-md md:h-8"
-          // Keep the selection alive: a press on the button would otherwise clear it before the click.
-          onMouseDown={(event) => event.preventDefault()}
+          onMouseDown={keepSelection}
           onClick={() => void save()}
         >
-          <BookmarkPlus /> 단어장에 저장
+          <BookmarkPlus /> {saved ? '다시 저장 (이전 노트 복원)' : '단어장에 저장'}
         </Button>
       )}
     </div>

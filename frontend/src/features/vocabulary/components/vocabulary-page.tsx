@@ -12,6 +12,7 @@ import { isSavableTerm, normalizeTerm } from '@/lib/vocabulary-term'
 import type { VocabularyTerm } from '@/types/learner.types'
 
 type StudiedFilter = 'all' | 'todo' | 'done'
+type ActiveFilter = 'all' | 'active' | 'inactive'
 
 /** Filter value for words that were not saved from a question. */
 const NO_SOURCE = '__none__'
@@ -23,6 +24,8 @@ export function VocabularyPage() {
   const [filter, setFilter] = useState<StudiedFilter>('all')
   const [query, setQuery] = useState('')
   const [section, setSection] = useState('all')
+  // Words switched off (e.g. already memorized) stay out of the list until asked for.
+  const [activeFilter, setActiveFilter] = useState<ActiveFilter>('active')
   const [newTerm, setNewTerm] = useState('')
   const [newSection, setNewSection] = useState('')
 
@@ -48,10 +51,12 @@ export function VocabularyPage() {
       const entrySection = sectionOf(entry)
       if (section === NO_SOURCE ? entrySection !== null : section !== 'all' && entrySection !== section) return false
       if (filter !== 'all' && entry.studied !== (filter === 'done')) return false
+      if (activeFilter !== 'all' && entry.active !== (activeFilter === 'active')) return false
       return !needle || entry.term.toLowerCase().includes(needle) || entry.memo.toLowerCase().includes(needle)
     })
-  }, [terms, filter, query, section, sectionOf])
+  }, [terms, filter, query, section, sectionOf, activeFilter])
   const doneCount = terms.filter((entry) => entry.studied).length
+  const inactiveCount = terms.filter((entry) => !entry.active).length
   const newTermText = normalizeTerm(newTerm)
 
   async function createNote() {
@@ -62,13 +67,17 @@ export function VocabularyPage() {
     <Card className="w-full max-w-3xl">
       <CardHeader>
         <CardTitle>
-          단어장 ({terms.length}) <span className="text-sm font-normal text-muted-foreground">공부 완료 {doneCount}</span>
+          단어장 ({terms.length}){' '}
+          <span className="text-sm font-normal text-muted-foreground">
+            공부 완료 {doneCount} · 비활성 {inactiveCount}
+          </span>
         </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         <p className="text-sm text-muted-foreground">
           문제, 보기, 해설에서 단어를 드래그하면 나타나는 &quot;단어장에 저장&quot; 버튼으로 저장하거나, 아래에서 새 노트를
-          직접 만듭니다. 노트는 마크다운으로 쓰고 이미지를 붙일 수 있으며, 노트 제목은 모든 화면에서 노란색으로 표시됩니다.
+          직접 만듭니다. 노트는 마크다운으로 쓰고 이미지를 붙일 수 있으며, 노트 제목은 모든 화면에서 노란색으로 표시됩니다. 외운 단어는
+          &quot;비활성화&quot;하면 표시가 꺼지고 목록에서도 빠집니다(내용은 남아 있고, 나중에 다시 저장하면 되살아납니다).
         </p>
         <form
           className="flex flex-wrap items-center gap-2"
@@ -106,6 +115,15 @@ export function VocabularyPage() {
               </option>
             ))}
             {hasWordsWithoutSource && <option value={NO_SOURCE}>과목 없음</option>}
+          </NativeSelect>
+          <NativeSelect
+            aria-label="활성 상태"
+            value={activeFilter}
+            onChange={(event) => setActiveFilter(event.target.value as ActiveFilter)}
+          >
+            <option value="active">활성만</option>
+            <option value="inactive">비활성만</option>
+            <option value="all">활성 전체</option>
           </NativeSelect>
           <NativeSelect
             aria-label="공부 상태"

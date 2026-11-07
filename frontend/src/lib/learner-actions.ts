@@ -200,7 +200,7 @@ export async function saveVocabularyTerm(
 /** Change a saved word's memo or studied flag. Optimistic; a failed save restores the old values. */
 export async function updateVocabularyTerm(
   term: string,
-  change: { memo?: string; studied?: boolean; section?: string | null },
+  change: { memo?: string; studied?: boolean; active?: boolean; section?: string | null },
 ): Promise<void> {
   const key = termKey(term)
   const before = learnerStore.getSnapshot().vocabulary[key]

@@ -29,6 +29,8 @@ export type VocabularyTerm = {
   /** The note, written in Markdown. */
   memo: string
   studied: boolean
+  /** Switched-off words are kept but not highlighted; saving the word again switches it on. */
+  active: boolean
   /** The question the word was first selected in. */
   sourceQuestionId: string | null
   /** Subject the note was filed under by hand; null means "the section of the source question". */

@@ -26,7 +26,12 @@ class SetMarkRequest(BaseModel):
 
 MAX_VOCABULARY_TERMS = 500
 MAX_TERM_LENGTH = 100
-MAX_MEMO_LENGTH = 2000
+MAX_MEMO_LENGTH = 20000
+MAX_SECTION_LENGTH = 30
+MAX_IMAGES_PER_TERM = 3
+MAX_IMAGE_BYTES = 400_000
+MAX_IMAGE_BYTES_PER_LEARNER = 20_000_000
+IMAGE_TYPES = ("image/png", "image/jpeg", "image/webp")
 
 
 def term_key(term: str) -> str:
@@ -34,12 +39,22 @@ def term_key(term: str) -> str:
     return term.lower()
 
 
+class VocabularyImageOut(BaseModel):
+    id: str
+    content_type: str
+    size: int
+
+
 class VocabularyTermOut(BaseModel):
     term: str
     memo: str
+    """The note, written in Markdown."""
     studied: bool
     source_question_id: str | None
     """The question the term was first selected in."""
+    section: str | None
+    """Subject the note belongs to (감리, 사업관리, 보안 ...), set when it was saved; None for older notes."""
+    images: list[VocabularyImageOut]
     created_at: datetime
     updated_at: datetime
 
@@ -58,11 +73,14 @@ class _TermRequest(BaseModel):
 
 class AddVocabularyRequest(_TermRequest):
     source_question_id: str | None = Field(default=None, max_length=50)
+    section: str | None = Field(default=None, max_length=MAX_SECTION_LENGTH)
 
 
 class UpdateVocabularyRequest(_TermRequest):
     memo: str | None = Field(default=None, max_length=MAX_MEMO_LENGTH)
     studied: bool | None = None
+    section: str | None = Field(default=None, max_length=MAX_SECTION_LENGTH)
+    """Change the section; an empty string clears it."""
 
 
 class StatsOut(BaseModel):

@@ -8,7 +8,11 @@ from api.models.learner import (
     AttemptResponse,
     MAX_MARK_COUNT,
     LearnerState,
+    IMAGE_TYPES,
     LocalImportRequest,
+    MAX_IMAGE_BYTES,
+    MAX_IMAGE_BYTES_PER_LEARNER,
+    MAX_IMAGES_PER_TERM,
     MAX_VOCABULARY_TERMS,
     MarkOut,
     MarkRemovedResponse,
@@ -18,18 +22,37 @@ from api.models.learner import (
     MiniTestSubmitResponse,
     ReviewState,
     StatsOut,
+    VocabularyImageOut,
     VocabularyTermOut,
     term_key,
 )
 from api.repositories.learner_repository import LearnerRepository
 from api.repositories.ox_question_repository import OxQuestionRepository
 from api.repositories.question_repository import QuestionRepository
-from api.errors import InvalidAnswerError, QuestionNotFoundError, VocabularyFullError, VocabularyTermNotFoundError
+from api.errors import (
+    InvalidAnswerError,
+    QuestionNotFoundError,
+    VocabularyFullError,
+    VocabularyImageInvalidError,
+    VocabularyImageLimitError,
+    VocabularyImageNotFoundError,
+    VocabularyImageTooLargeError,
+    VocabularyTermNotFoundError,
+)
 from api.services.question_service import QuestionService
 
 # Wrong answers in a row from which the UI flags a question. Marking does not wait for it: every
 # wrong answer adds a marker.
 AUTO_MARK_STREAK = 2
+
+
+def _looks_like(content_type: str, data: bytes) -> bool:
+    """The bytes must start like the claimed picture format, so a file cannot pass as an image by its header alone."""
+    if content_type == "image/png":
+        return data.startswith(b"\x89PNG\r\n\x1a\n")
+    if content_type == "image/jpeg":
+        return data.startswith(b"\xff\xd8\xff")
+    return data[:4] == b"RIFF" and data[8:12] == b"WEBP"
 
 
 class LearnerService:
@@ -93,7 +116,7 @@ class LearnerService:
     # ---- vocabulary --------------------------------------------------------------------------
 
     async def add_term(
-        self, learner_id: UUID, term: str, source_question_id: str | None
+        self, learner_id: UUID, term: str, source_question_id: str | None, section: str | None = None
     ) -> VocabularyTermOut:
         """Save a word; saving one that is already there changes nothing."""
         if source_question_id is not None and self._bank.get_by_id(source_question_id) is None:
@@ -104,13 +127,13 @@ class LearnerService:
             existing = await self._repo.get_vocabulary(learner_id)
             if term_key(term) not in existing and len(existing) >= MAX_VOCABULARY_TERMS:
                 raise VocabularyFullError()
-            return await self._repo.add_term(learner_id, term, source_question_id)
+            return await self._repo.add_term(learner_id, term, source_question_id, section or None)
 
     async def update_term(
-        self, learner_id: UUID, term: str, memo: str | None, studied: bool | None
+        self, learner_id: UUID, term: str, memo: str | None, studied: bool | None, section: str | None = None
     ) -> VocabularyTermOut:
         async with self._session.begin():
-            updated = await self._repo.update_term(learner_id, term, memo, studied)
+            updated = await self._repo.update_term(learner_id, term, memo, studied, section)
         if updated is None:
             raise VocabularyTermNotFoundError()
         return updated
@@ -118,6 +141,34 @@ class LearnerService:
     async def remove_term(self, learner_id: UUID, term: str) -> None:
         async with self._session.begin():
             await self._repo.remove_term(learner_id, term)
+
+    async def add_image(self, learner_id: UUID, term: str, content_type: str, data: bytes) -> VocabularyImageOut:
+        """Attach a picture to a saved word, within the size, per-note and per-learner limits."""
+        if content_type not in IMAGE_TYPES or not _looks_like(content_type, data):
+            raise VocabularyImageInvalidError()
+        if len(data) > MAX_IMAGE_BYTES:
+            raise VocabularyImageTooLargeError()
+        async with self._session.begin():
+            # Without the lock, concurrent uploads could each pass the limit checks.
+            await self._repo.lock_learner(learner_id)
+            if not await self._repo.has_term(learner_id, term):
+                raise VocabularyTermNotFoundError()
+            on_note, total = await self._repo.count_images(learner_id, term)
+            if on_note >= MAX_IMAGES_PER_TERM or total + len(data) > MAX_IMAGE_BYTES_PER_LEARNER:
+                raise VocabularyImageLimitError()
+            return await self._repo.add_image(learner_id, term, content_type, data)
+
+    async def get_image(self, learner_id: UUID, image_id: UUID) -> tuple[str, bytes]:
+        async with self._session.begin():
+            image = await self._repo.get_image(learner_id, image_id)
+        if image is None:
+            raise VocabularyImageNotFoundError()
+        return image
+
+    async def remove_image(self, learner_id: UUID, image_id: UUID) -> None:
+        async with self._session.begin():
+            if not await self._repo.remove_image(learner_id, image_id):
+                raise VocabularyImageNotFoundError()
 
     # ---- attempts ----------------------------------------------------------------------------
 

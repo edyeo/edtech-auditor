@@ -1,11 +1,13 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Path, Query
+from fastapi import APIRouter, Depends, Path, Query, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.db.session import get_session
+from api.errors import VocabularyImageTooLargeError
 from api.models.learner import (
+    MAX_IMAGE_BYTES,
     AddVocabularyRequest,
     AttemptRequest,
     AttemptResponse,
@@ -20,6 +22,7 @@ from api.models.learner import (
     ReviewState,
     SetMarkRequest,
     UpdateVocabularyRequest,
+    VocabularyImageOut,
     VocabularyTermOut,
 )
 from api.routers.deps import get_learner_id
@@ -83,7 +86,7 @@ async def add_vocabulary_term(
     payload: AddVocabularyRequest, learner_id: LearnerId, service: Service
 ) -> VocabularyTermOut:
     """Save a word selected in a question; saving one that already exists returns it unchanged."""
-    return await service.add_term(learner_id, payload.term, payload.source_question_id)
+    return await service.add_term(learner_id, payload.term, payload.source_question_id, payload.section)
 
 
 @router.patch("/vocabulary", response_model=VocabularyTermOut)
@@ -91,7 +94,7 @@ async def update_vocabulary_term(
     payload: UpdateVocabularyRequest, learner_id: LearnerId, service: Service
 ) -> VocabularyTermOut:
     """Change the memo and/or the studied flag of a saved word."""
-    return await service.update_term(learner_id, payload.term, payload.memo, payload.studied)
+    return await service.update_term(learner_id, payload.term, payload.memo, payload.studied, payload.section)
 
 
 @router.delete("/vocabulary", status_code=204)
@@ -99,6 +102,37 @@ async def remove_vocabulary_term(
     term: Annotated[str, Query(min_length=1, max_length=200)], learner_id: LearnerId, service: Service
 ) -> None:
     await service.remove_term(learner_id, " ".join(term.split()))
+
+
+@router.post("/vocabulary/images", response_model=VocabularyImageOut)
+async def add_vocabulary_image(
+    request: Request,
+    term: Annotated[str, Query(min_length=1, max_length=200)],
+    learner_id: LearnerId,
+    service: Service,
+) -> VocabularyImageOut:
+    """Attach a picture to a saved word. The body is the raw image; its Content-Type says which format."""
+    declared = request.headers.get("content-length")
+    if declared is not None and declared.isdigit() and int(declared) > MAX_IMAGE_BYTES:
+        raise VocabularyImageTooLargeError()  # refuse before reading the body
+    content_type = request.headers.get("content-type", "").split(";")[0].strip().lower()
+    return await service.add_image(learner_id, " ".join(term.split()), content_type, await request.body())
+
+
+@router.get("/vocabulary/images/{image_id}")
+async def get_vocabulary_image(image_id: UUID, learner_id: LearnerId, service: Service) -> Response:
+    """The picture's bytes. Needs the bearer token, so the page loads it with fetch rather than an <img> URL."""
+    content_type, data = await service.get_image(learner_id, image_id)
+    return Response(
+        content=data,
+        media_type=content_type,
+        headers={"Cache-Control": "private, max-age=86400", "X-Content-Type-Options": "nosniff"},
+    )
+
+
+@router.delete("/vocabulary/images/{image_id}", status_code=204)
+async def remove_vocabulary_image(image_id: UUID, learner_id: LearnerId, service: Service) -> None:
+    await service.remove_image(learner_id, image_id)
 
 
 @router.post("/attempts", response_model=AttemptResponse)

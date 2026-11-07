@@ -18,6 +18,22 @@ class VocabularyTermNotFoundError(Exception):
     """Raised when a vocabulary term to update is not in the learner's list."""
 
 
+class VocabularyImageInvalidError(Exception):
+    """Raised when an uploaded vocabulary image is not a PNG, JPEG or WebP picture."""
+
+
+class VocabularyImageTooLargeError(Exception):
+    """Raised when an uploaded vocabulary image is bigger than the allowed size."""
+
+
+class VocabularyImageLimitError(Exception):
+    """Raised when a note or the learner already holds the most image data allowed."""
+
+
+class VocabularyImageNotFoundError(Exception):
+    """Raised when a vocabulary image does not exist (or belongs to another learner)."""
+
+
 class VocabularyFullError(Exception):
     """Raised when the learner already saved the most vocabulary terms allowed."""
 

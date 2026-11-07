@@ -18,6 +18,10 @@ from api.errors import (
     InvalidTokenError,
     QuestionNotFoundError,
     VocabularyFullError,
+    VocabularyImageInvalidError,
+    VocabularyImageLimitError,
+    VocabularyImageNotFoundError,
+    VocabularyImageTooLargeError,
     VocabularyTermNotFoundError,
 )
 from api.routers import admin, explain, learner, ox, questions
@@ -47,6 +51,10 @@ _DOMAIN_ERRORS: dict[type[Exception], tuple[int, str]] = {
     QuestionNotFoundError: (404, "question not found"),
     VocabularyTermNotFoundError: (404, "vocabulary term not found"),
     VocabularyFullError: (409, "vocabulary is full"),
+    VocabularyImageInvalidError: (415, "image must be a PNG, JPEG or WebP picture"),
+    VocabularyImageTooLargeError: (413, "image is too large"),
+    VocabularyImageLimitError: (409, "image limit reached"),
+    VocabularyImageNotFoundError: (404, "vocabulary image not found"),
     ExplanationUnavailableError: (502, "explanation provider is unavailable"),
     InvalidTokenError: (401, "sign in required"),
     AuthNotConfiguredError: (503, "auth is not configured"),

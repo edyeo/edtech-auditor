@@ -1,5 +1,5 @@
 from datetime import UTC, datetime
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import delete, func, select, text
 from sqlalchemy.dialects.postgresql import insert
@@ -13,6 +13,7 @@ from api.db.tables import (
     question_marks,
     question_stats,
     review_states,
+    vocabulary_images,
     vocabulary_terms,
 )
 from api.models.learner import (
@@ -23,6 +24,7 @@ from api.models.learner import (
     OxStatsOut,
     ReviewState,
     StatsOut,
+    VocabularyImageOut,
     VocabularyTermOut,
     term_key,
 )
@@ -90,15 +92,32 @@ class LearnerRepository:
 
     async def get_vocabulary(self, learner_id: UUID) -> dict[str, VocabularyTermOut]:
         rows = await self._session.execute(select(vocabulary_terms).where(vocabulary_terms.c.learner_id == learner_id))
-        return {r.term_key: self._to_term(r) for r in rows}
+        images = await self._image_list(learner_id)
+        return {r.term_key: self._to_term(r, images.get(r.term_key, [])) for r in rows}
+
+    async def _image_list(self, learner_id: UUID, key: str | None = None) -> dict[str, list[VocabularyImageOut]]:
+        """Image metadata (never the bytes) per term key, oldest first."""
+        query = select(
+            vocabulary_images.c.id, vocabulary_images.c.term_key, vocabulary_images.c.content_type, vocabulary_images.c.size
+        ).where(vocabulary_images.c.learner_id == learner_id)
+        if key is not None:
+            query = query.where(vocabulary_images.c.term_key == key)
+        by_key: dict[str, list[VocabularyImageOut]] = {}
+        for r in await self._session.execute(query.order_by(vocabulary_images.c.created_at, vocabulary_images.c.id)):
+            by_key.setdefault(r.term_key, []).append(
+                VocabularyImageOut(id=str(r.id), content_type=r.content_type, size=r.size)
+            )
+        return by_key
 
     @staticmethod
-    def _to_term(row) -> VocabularyTermOut:  # noqa: ANN001 - a SQLAlchemy Row
+    def _to_term(row, images: list[VocabularyImageOut]) -> VocabularyTermOut:  # noqa: ANN001 - a SQLAlchemy Row
         return VocabularyTermOut(
             term=row.term,
             memo=row.memo,
             studied=row.studied,
             source_question_id=row.source_question_id,
+            section=row.section,
+            images=images,
             created_at=row.created_at,
             updated_at=row.updated_at,
         )
@@ -266,7 +285,7 @@ class LearnerRepository:
         )
 
     async def add_term(
-        self, learner_id: UUID, term: str, source_question_id: str | None
+        self, learner_id: UUID, term: str, source_question_id: str | None, section: str | None
     ) -> VocabularyTermOut:
         """Save the term, or return the one already saved (its memo and study state stay as they are)."""
         now = datetime.now(UTC)
@@ -280,6 +299,7 @@ class LearnerRepository:
                 memo="",
                 studied=False,
                 source_question_id=source_question_id,
+                section=section,
                 created_at=now,
                 updated_at=now,
             )
@@ -292,17 +312,19 @@ class LearnerRepository:
                 )
             )
         ).one()
-        return self._to_term(row)
+        return self._to_term(row, (await self._image_list(learner_id, key)).get(key, []))
 
     async def update_term(
-        self, learner_id: UUID, term: str, memo: str | None, studied: bool | None
+        self, learner_id: UUID, term: str, memo: str | None, studied: bool | None, section: str | None
     ) -> VocabularyTermOut | None:
-        """Change only the given fields; None when the term is not saved."""
+        """Change only the given fields (an empty section clears it); None when the term is not saved."""
         values: dict[str, object] = {"updated_at": datetime.now(UTC)}
         if memo is not None:
             values["memo"] = memo
         if studied is not None:
             values["studied"] = studied
+        if section is not None:
+            values["section"] = section or None
         row = (
             await self._session.execute(
                 vocabulary_terms.update()
@@ -311,7 +333,10 @@ class LearnerRepository:
                 .returning(*vocabulary_terms.c)
             )
         ).first()
-        return self._to_term(row) if row else None
+        if row is None:
+            return None
+        key = term_key(term)
+        return self._to_term(row, (await self._image_list(learner_id, key)).get(key, []))
 
     async def remove_term(self, learner_id: UUID, term: str) -> None:
         await self._session.execute(
@@ -319,6 +344,58 @@ class LearnerRepository:
                 vocabulary_terms.c.learner_id == learner_id, vocabulary_terms.c.term_key == term_key(term)
             )
         )
+
+    async def count_images(self, learner_id: UUID, term: str) -> tuple[int, int]:
+        """(images on this note, bytes of all the learner's images)."""
+        per_term = await self._session.scalar(
+            select(func.count())
+            .select_from(vocabulary_images)
+            .where(vocabulary_images.c.learner_id == learner_id, vocabulary_images.c.term_key == term_key(term))
+        )
+        total = await self._session.scalar(
+            select(func.coalesce(func.sum(vocabulary_images.c.size), 0)).where(vocabulary_images.c.learner_id == learner_id)
+        )
+        return per_term or 0, int(total or 0)
+
+    async def has_term(self, learner_id: UUID, term: str) -> bool:
+        return bool(
+            await self._session.scalar(
+                select(func.count())
+                .select_from(vocabulary_terms)
+                .where(vocabulary_terms.c.learner_id == learner_id, vocabulary_terms.c.term_key == term_key(term))
+            )
+        )
+
+    async def add_image(self, learner_id: UUID, term: str, content_type: str, data: bytes) -> VocabularyImageOut:
+        image_id = uuid4()
+        await self._session.execute(
+            insert(vocabulary_images).values(
+                id=image_id,
+                learner_id=learner_id,
+                term_key=term_key(term),
+                content_type=content_type,
+                size=len(data),
+                data=data,
+                created_at=datetime.now(UTC),
+            )
+        )
+        return VocabularyImageOut(id=str(image_id), content_type=content_type, size=len(data))
+
+    async def get_image(self, learner_id: UUID, image_id: UUID) -> tuple[str, bytes] | None:
+        row = (
+            await self._session.execute(
+                select(vocabulary_images.c.content_type, vocabulary_images.c.data).where(
+                    vocabulary_images.c.id == image_id, vocabulary_images.c.learner_id == learner_id
+                )
+            )
+        ).first()
+        return (row.content_type, bytes(row.data)) if row else None
+
+    async def remove_image(self, learner_id: UUID, image_id: UUID) -> bool:
+        result = await self._session.execute(
+            delete(vocabulary_images).where(vocabulary_images.c.id == image_id, vocabulary_images.c.learner_id == learner_id)
+        )
+        return result.rowcount > 0
 
     # ---- stats -------------------------------------------------------------------------------
 

@@ -7,6 +7,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Integer,
+    LargeBinary,
     MetaData,
     SmallInteger,
     Table,
@@ -76,8 +77,21 @@ vocabulary_terms = Table(
     Column("memo", Text, nullable=False),
     Column("studied", Boolean, nullable=False),
     Column("source_question_id", Text),
+    Column("section", Text),
     Column("created_at", DateTime(timezone=True), nullable=False),
     Column("updated_at", DateTime(timezone=True), nullable=False),
+)
+
+vocabulary_images = Table(
+    "vocabulary_images",
+    metadata,
+    Column("id", UUID(as_uuid=True), primary_key=True),
+    Column("learner_id", UUID(as_uuid=True), nullable=False),
+    Column("term_key", Text, nullable=False),
+    Column("content_type", Text, nullable=False),
+    Column("size", Integer, nullable=False),
+    Column("data", LargeBinary, nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False),
 )
 
 review_states = Table(

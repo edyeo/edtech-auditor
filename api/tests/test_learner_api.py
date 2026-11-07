@@ -227,7 +227,7 @@ async def test_statement_marker_input_is_validated(client, learner):
     assert (await put_ox_mark(client, learner, OX_QUESTION, 99, 1)).status_code == 422  # no such statement
     assert (await put_ox_mark(client, learner, OX_QUESTION, -1, 1)).status_code == 422
     assert (await put_ox_mark(client, learner, "nope", 0, 1)).status_code == 404
-    assert (await put_ox_mark(client, learner, Q1, 0, 1)).status_code == 404  # not an O/X question
+    assert (await put_ox_mark(client, learner, "2021-22-26", 0, 1)).status_code == 404  # not an O/X question
     assert (await client.put(f"/api/learner/ox-marks/{OX_QUESTION}/0", headers=learner)).status_code == 422
     assert (await client.put(f"/api/learner/ox-marks/{OX_QUESTION}/0", json={"count": 1})).status_code == 401
 
@@ -278,7 +278,7 @@ async def test_vocabulary_input_is_validated(client, learner):
         assert (await add_term(client, learner, bad)).status_code == 422
     assert (await client.patch("/api/learner/vocabulary", headers=learner, json={"term": "없는 단어"})).status_code == 404
     await add_term(client, learner, "주경로")
-    too_long = {"term": "주경로", "memo": "m" * 2001}
+    too_long = {"term": "주경로", "memo": "m" * 20001}
     assert (await client.patch("/api/learner/vocabulary", headers=learner, json=too_long)).status_code == 422
     assert (await client.post("/api/learner/vocabulary", json={"term": "a"})).status_code == 401
 
@@ -296,3 +296,82 @@ async def test_vocabulary_is_limited_per_account(client, learner):
         assert {r.status_code for r in batch} == {200}, [r.text for r in batch if r.status_code != 200][:1]
     assert (await add_term(client, learner, "one-too-many")).status_code == 409
     assert (await add_term(client, learner, "TERM-0")).status_code == 200  # an existing word is not "one more"
+
+
+# ---- vocabulary notes: section, long Markdown memo and images ---------------------------------------
+
+PNG = b"\x89PNG\r\n\x1a\n" + b"0" * 64
+JPEG = b"\xff\xd8\xff\xe0" + b"0" * 64
+WEBP = b"RIFF\x24\x00\x00\x00WEBP" + b"0" * 64
+
+
+async def upload(client, learner, term, data=PNG, content_type="image/png"):
+    return await client.post(
+        "/api/learner/vocabulary/images", headers={**learner, "Content-Type": content_type}, params={"term": term}, content=data
+    )
+
+
+async def test_a_note_keeps_its_section_and_a_long_markdown_memo(client, learner):
+    saved = await client.post("/api/learner/vocabulary", headers=learner, json={"term": "주경로", "section": "사업관리"})
+    assert saved.json()["section"] == "사업관리" and saved.json()["source_question_id"] is None
+
+    memo = "# 주경로\n\n- 가장 긴 경로\n" + "x" * 15000
+    changed = await client.patch("/api/learner/vocabulary", headers=learner, json={"term": "주경로", "memo": memo})
+    assert changed.json()["memo"] == memo and changed.json()["section"] == "사업관리"
+    moved = await client.patch("/api/learner/vocabulary", headers=learner, json={"term": "주경로", "section": "보안"})
+    assert moved.json()["section"] == "보안"
+    cleared = await client.patch("/api/learner/vocabulary", headers=learner, json={"term": "주경로", "section": ""})
+    assert cleared.json()["section"] is None
+    too_long = await client.patch("/api/learner/vocabulary", headers=learner, json={"term": "주경로", "memo": "m" * 20001})
+    assert too_long.status_code == 422
+
+
+async def test_an_image_is_stored_listed_and_served_back_to_its_owner_only(client, learner):
+    await add_term(client, learner, "주경로")
+    stored = await upload(client, learner, "주경로")
+    assert stored.status_code == 200, stored.text
+    image = stored.json()
+    assert image["content_type"] == "image/png" and image["size"] == len(PNG)
+
+    state = (await client.get("/api/learner/state", headers=learner)).json()
+    assert state["vocabulary"]["주경로"]["images"] == [image]  # metadata only, never the bytes
+
+    served = await client.get(f"/api/learner/vocabulary/images/{image['id']}", headers=learner)
+    assert served.status_code == 200 and served.content == PNG
+    assert served.headers["content-type"] == "image/png" and served.headers["x-content-type-options"] == "nosniff"
+
+    other = {"Authorization": f"Bearer {access_token()}"}
+    assert (await client.get(f"/api/learner/vocabulary/images/{image['id']}", headers=other)).status_code == 404
+    assert (await client.delete(f"/api/learner/vocabulary/images/{image['id']}", headers=other)).status_code == 404
+    assert (await client.get(f"/api/learner/vocabulary/images/{image['id']}")).status_code == 401
+
+
+async def test_an_image_can_be_removed_and_goes_with_its_note(client, learner):
+    await add_term(client, learner, "주경로")
+    first = (await upload(client, learner, "주경로")).json()
+    second = (await upload(client, learner, "주경로", JPEG, "image/jpeg")).json()
+    assert (await client.delete(f"/api/learner/vocabulary/images/{first['id']}", headers=learner)).status_code == 204
+    state = (await client.get("/api/learner/state", headers=learner)).json()
+    assert [i["id"] for i in state["vocabulary"]["주경로"]["images"]] == [second["id"]]
+
+    await client.delete("/api/learner/vocabulary", headers=learner, params={"term": "주경로"})
+    assert (await client.get(f"/api/learner/vocabulary/images/{second['id']}", headers=learner)).status_code == 404
+
+
+async def test_image_uploads_are_checked(client, learner):
+    await add_term(client, learner, "주경로")
+    assert (await upload(client, learner, "주경로", WEBP, "image/webp")).status_code == 200
+    assert (await upload(client, learner, "주경로", b"GIF89a" + b"0" * 64, "image/gif")).status_code == 415
+    assert (await upload(client, learner, "주경로", b"not a png at all" * 4, "image/png")).status_code == 415  # header lies
+    assert (await upload(client, learner, "주경로", PNG + b"0" * 400_000)).status_code == 413
+    assert (await upload(client, learner, "없는 단어")).status_code == 404
+    assert (await client.post("/api/learner/vocabulary/images", params={"term": "주경로"}, content=PNG)).status_code == 401
+
+
+async def test_a_note_holds_at_most_three_images(client, learner):
+    await add_term(client, learner, "주경로")
+    for _ in range(3):
+        assert (await upload(client, learner, "주경로")).status_code == 200
+    assert (await upload(client, learner, "주경로")).status_code == 409
+    await add_term(client, learner, "다른 단어")
+    assert (await upload(client, learner, "다른 단어")).status_code == 200  # the limit is per note

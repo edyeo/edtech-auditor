@@ -1,14 +1,16 @@
 import { importLocalLearnerDataOnce } from '@/lib/import-local-learner-data'
 import {
   deleteMark,
+  deleteOxMark,
   fetchLearnerState,
   fetchMiniTests,
   postAttempt,
   postMiniTest,
   putMark,
+  putOxMark,
   putReview,
 } from '@/lib/learner.api'
-import { INITIAL_LEARNER_STATE, learnerStore } from '@/lib/learner-state.store'
+import { INITIAL_LEARNER_STATE, learnerStore, type LearnerState } from '@/lib/learner-state.store'
 import type {
   MiniTestRecord,
   OxStats,
@@ -57,71 +59,102 @@ async function loadLearnerState(): Promise<void> {
   }
 }
 
-// Marker edits are sent as "set the count to N". Taps are coalesced per question: while a request is
+// Marker edits are sent as "set the count to N". Taps are coalesced per key: while a request is
 // in flight only the latest wanted count is remembered and sent next, so quick taps cannot land out of
 // order and an older response never overwrites a newer tap.
 const wantedMarkCounts = new Map<string, number>()
 const flushingMarks = new Set<string>()
 
-/** Marker box +/- buttons. Optimistic: the UI changes at once and rolls back if the server refuses. */
+/** Where one kind of marker (on a question, or on an O/X statement) lives and how it is saved. */
+type MarkChannel = {
+  read: (state: LearnerState) => QuestionMarkMap
+  write: (state: LearnerState, marks: QuestionMarkMap) => LearnerState
+  save: (key: string, count: number) => Promise<QuestionMark>
+  /** Remove every marker of the key; may update other state the server returns with it. */
+  remove: (key: string) => Promise<void>
+}
+
+const QUESTION_MARKS: MarkChannel = {
+  read: (state) => state.marks,
+  write: (state, marks) => ({ ...state, marks }),
+  save: putMark,
+  remove: async (questionId) => {
+    const stats = await deleteMark(questionId)
+    if (stats) learnerStore.update((s) => ({ ...s, stats: { ...s.stats, [questionId]: stats } }))
+  },
+}
+
+const OX_STATEMENT_MARKS: MarkChannel = {
+  read: (state) => state.oxMarks,
+  write: (state, oxMarks) => ({ ...state, oxMarks }),
+  save: putOxMark,
+  remove: deleteOxMark,
+}
+
+/** Marker box +/- buttons of a question. Optimistic: the UI changes at once and rolls back if the server refuses. */
 export function setQuestionMarkCount(questionId: string, count: number): void {
+  setMarkCount(QUESTION_MARKS, questionId, count)
+}
+
+/** Marker box +/- buttons of one O/X statement, keyed "question_id#statement_index". */
+export function setOxStatementMarkCount(statementKey: string, count: number): void {
+  setMarkCount(OX_STATEMENT_MARKS, statementKey, count)
+}
+
+function setMarkCount(channel: MarkChannel, key: string, count: number): void {
   const before = learnerStore.getSnapshot()
   const next = Math.min(Math.max(count, 0), before.maxMarkCount)
-  const current = before.marks[questionId]?.count ?? 0
-  if (next === current && !flushingMarks.has(questionId)) return
+  const confirmedMark = channel.read(before)[key]
+  if (next === (confirmedMark?.count ?? 0) && !flushingMarks.has(key)) return
 
-  wantedMarkCounts.set(questionId, next)
-  learnerStore.update((s) => ({ ...s, marks: withMarkCount(s.marks, questionId, next) }))
-  void flushMarkCount(questionId, before.marks[questionId])
+  wantedMarkCounts.set(key, next)
+  learnerStore.update((s) => channel.write(s, withMarkCount(channel.read(s), key, next)))
+  void flushMarkCount(channel, key, confirmedMark)
 }
 
-function withMarkCount(marks: QuestionMarkMap, questionId: string, count: number): QuestionMarkMap {
+function withMarkCount(marks: QuestionMarkMap, key: string, count: number): QuestionMarkMap {
   if (count === 0) {
-    const { [questionId]: _removed, ...rest } = marks
+    const { [key]: _removed, ...rest } = marks
     return rest
   }
-  const existing = marks[questionId]
+  const existing = marks[key]
   return {
     ...marks,
-    [questionId]: existing
-      ? { ...existing, count }
-      : { markedAt: new Date().toISOString(), source: 'manual', count },
+    [key]: existing ? { ...existing, count } : { markedAt: new Date().toISOString(), source: 'manual', count },
   }
 }
 
-async function flushMarkCount(questionId: string, confirmedMark: QuestionMark | undefined): Promise<void> {
-  if (flushingMarks.has(questionId)) return
-  flushingMarks.add(questionId)
+async function flushMarkCount(
+  channel: MarkChannel,
+  key: string,
+  confirmedMark: QuestionMark | undefined,
+): Promise<void> {
+  if (flushingMarks.has(key)) return
+  flushingMarks.add(key)
   let confirmed = confirmedMark
   try {
     for (;;) {
-      const wanted = wantedMarkCounts.get(questionId) ?? 0
+      const wanted = wantedMarkCounts.get(key) ?? 0
       if (wanted === 0) {
-        if (confirmed) {
-          const stats = await deleteMark(questionId)
-          if (stats) learnerStore.update((s) => ({ ...s, stats: { ...s.stats, [questionId]: stats } }))
-        }
+        if (confirmed) await channel.remove(key)
         confirmed = undefined
       } else if (wanted !== confirmed?.count) {
-        confirmed = await putMark(questionId, wanted)
+        confirmed = await channel.save(key, wanted)
       }
-      if ((wantedMarkCounts.get(questionId) ?? 0) === wanted) break
+      if ((wantedMarkCounts.get(key) ?? 0) === wanted) break
     }
     if (confirmed) {
       const mark = confirmed
-      learnerStore.update((s) => ({ ...s, marks: { ...s.marks, [questionId]: mark } }))
+      learnerStore.update((s) => channel.write(s, { ...channel.read(s), [key]: mark }))
     }
   } catch {
-    learnerStore.update((s) => ({
-      ...s,
-      marks: confirmed
-        ? { ...s.marks, [questionId]: confirmed }
-        : withMarkCount(s.marks, questionId, 0),
-    }))
+    learnerStore.update((s) =>
+      channel.write(s, confirmed ? { ...channel.read(s), [key]: confirmed } : withMarkCount(channel.read(s), key, 0)),
+    )
     notify('마커를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.')
   } finally {
-    wantedMarkCounts.delete(questionId)
-    flushingMarks.delete(questionId)
+    wantedMarkCounts.delete(key)
+    flushingMarks.delete(key)
   }
 }
 

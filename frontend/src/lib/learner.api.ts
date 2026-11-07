@@ -105,6 +105,7 @@ export async function fetchLearnerState(): Promise<{
   autoMarkStreak: number
   maxMarkCount: number
   marks: QuestionMarkMap
+  oxMarks: QuestionMarkMap
   stats: QuestionStatsMap
   oxStats: OxStatsMap
   review: ReviewStateMap
@@ -113,6 +114,7 @@ export async function fetchLearnerState(): Promise<{
     auto_mark_streak: number
     max_mark_count: number
     marks: Record<string, WireMark>
+    ox_marks: Record<string, WireMark>
     stats: Record<string, WireStats>
     ox_stats: Record<string, WireOxStats>
     review: Record<string, WireReview>
@@ -121,6 +123,7 @@ export async function fetchLearnerState(): Promise<{
     autoMarkStreak: raw.auto_mark_streak,
     maxMarkCount: raw.max_mark_count,
     marks: mapValues(raw.marks, toMark),
+    oxMarks: mapValues(raw.ox_marks, toMark),
     stats: mapValues(raw.stats, toStats),
     oxStats: mapValues(raw.ox_stats, toOxStats),
     review: mapValues(raw.review, toReview),
@@ -141,6 +144,23 @@ export async function putMark(questionId: string, count: number): Promise<Questi
 export async function deleteMark(questionId: string): Promise<QuestionStats | null> {
   const raw = await learnerRequest<{ stats: WireStats | null }>(`/marks/${questionId}`, { method: 'DELETE' })
   return raw.stats ? toStats(raw.stats) : null
+}
+
+/** "question_id#statement_index" -> the path of that statement's marker endpoint. */
+function oxMarkPath(statementKey: string): string {
+  const [questionId, statementIndex] = statementKey.split('#')
+  return `/ox-marks/${questionId}/${statementIndex}`
+}
+
+/** Set how many markers one O/X statement carries (1 and up); removing them all is `deleteOxMark`. */
+export async function putOxMark(statementKey: string, count: number): Promise<QuestionMark> {
+  return toMark(
+    await learnerRequest<WireMark>(oxMarkPath(statementKey), { method: 'PUT', body: JSON.stringify({ count }) }),
+  )
+}
+
+export function deleteOxMark(statementKey: string): Promise<void> {
+  return learnerRequest(oxMarkPath(statementKey), { method: 'DELETE' })
 }
 
 export async function postAttempt(

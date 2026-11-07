@@ -19,6 +19,8 @@ export type LearnerState = {
   /** Server rule: the most markers one question can carry. */
   maxMarkCount: number
   marks: QuestionMarkMap
+  /** Markers on single O/X statements, keyed "question_id#statement_index"; separate from `marks`. */
+  oxMarks: QuestionMarkMap
   stats: QuestionStatsMap
   oxStats: OxStatsMap
   review: ReviewStateMap
@@ -32,6 +34,7 @@ export const INITIAL_LEARNER_STATE: LearnerState = {
   autoMarkStreak: 2,
   maxMarkCount: 5,
   marks: {},
+  oxMarks: {},
   stats: {},
   oxStats: {},
   review: {},

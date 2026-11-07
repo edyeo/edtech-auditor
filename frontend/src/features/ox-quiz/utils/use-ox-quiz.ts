@@ -8,7 +8,7 @@ import { recordOxStats } from '@/lib/learner-actions'
 import { toOxStats } from '@/lib/learner.api'
 import { useOxStats } from '@/lib/use-ox-stats'
 import { useQuestionBank } from '@/lib/use-question-bank'
-import { useQuestionMarks } from '@/lib/use-question-marks'
+import { useOxStatementMarks } from '@/lib/use-ox-statement-marks'
 import { useQuestionStats } from '@/lib/use-question-stats'
 
 const PAGE_SIZE = 20
@@ -26,7 +26,7 @@ function loadStatements(): Promise<OxStatement[]> {
 
 export function useOxQuiz() {
   const bank = useQuestionBank()
-  const { markedIds } = useQuestionMarks()
+  const { markedKeys } = useOxStatementMarks()
   const stats = useQuestionStats()
   const oxStats = useOxStats()
   const [statements, setStatements] = useState<OxStatement[] | null>(null)
@@ -58,7 +58,7 @@ export function useOxQuiz() {
   const initialOrder = useMemo(() => shuffleItems(items), [items])
   // The server lists statements by question, so `items` itself is the question order.
   const ordered = filter.sort === 'order' ? items : (reshuffled ?? initialOrder)
-  const markedSet = useMemo(() => new Set(markedIds), [markedIds])
+  const markedSet = useMemo(() => new Set(markedKeys), [markedKeys])
   const filtered = useMemo(
     () => filterOxItems(ordered, filter, markedSet, stats, solvedSnapshot),
     [ordered, filter, markedSet, stats, solvedSnapshot],
@@ -114,7 +114,7 @@ export function useOxQuiz() {
     error: bank.error ?? loadError,
     years,
     subjects,
-    hasMarks: markedIds.length > 0,
+    hasMarks: markedKeys.length > 0,
     oxStats,
     filter,
     updateFilter,

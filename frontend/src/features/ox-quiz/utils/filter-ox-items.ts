@@ -12,14 +12,14 @@ export const DEFAULT_OX_FILTER: OxFilter = {
 }
 
 /**
- * Markers and wrong answers belong to the question, so every statement of a question passes or fails together.
- * "Solved" is per statement; `solvedStats` is a snapshot taken when the list was built, so a statement the
+ * "Marked" is per statement (its own markers); wrong answers belong to the question, so every statement of a
+ * question passes or fails together on that. "Solved" is per statement; `solvedStats` is a snapshot taken when the list was built, so a statement the
  * learner has just answered does not vanish from an "unsolved" list before its result is read.
  */
 export function filterOxItems(
   items: OxItem[],
   filter: OxFilter,
-  markedIds: ReadonlySet<string>,
+  markedKeys: ReadonlySet<string>,
   stats: QuestionStatsMap,
   solvedStats: OxStatsMap,
 ): OxItem[] {
@@ -29,7 +29,7 @@ export function filterOxItems(
     const questionId = item.question.id
     if (filter.year !== 'all' && item.question.year !== filter.year) return false
     if (filter.subject !== 'all' && item.question.subject !== filter.subject) return false
-    if (filter.markedOnly && !markedIds.has(questionId)) return false
+    if (filter.markedOnly && !markedKeys.has(item.key)) return false
     if (filter.wrongOnly && !(stats[questionId]?.wrong > 0)) return false
     if (filter.solved !== 'all') {
       const solved = (solvedStats[item.key]?.attempts ?? 0) > 0

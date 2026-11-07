@@ -1,8 +1,8 @@
 import { useCallback, useState } from 'react'
 import { ExplanationPanel } from '@/components/explanation-panel'
-import { QuestionMarkerBox } from '@/components/question-marker-box'
 import { Button } from '@/components/ui/button'
 import { OxQuestionDetail } from '@/features/ox-quiz/components/ox-question-detail'
+import { OxStatementMarkerBox } from '@/features/ox-quiz/components/ox-statement-marker-box'
 import type { OxAnswer, OxItem, OxResult } from '@/features/ox-quiz/types/ox-quiz.types'
 import { fetchOxExplanation } from '@/features/ox-quiz/utils/ox-quiz.api'
 import { useToggledExplanation } from '@/features/ox-quiz/utils/use-toggled-explanation'
@@ -30,12 +30,12 @@ export function OxStatementRow({ item, result, isPending, stats, onAnswer }: OxS
 
   return (
     <li className="border-b py-3 last:border-b-0">
-      {/* Markers belong to the question, so every statement of it shows the same boxes. On narrow screens
-          they sit on their own line above the statement, at the right. */}
+      {/* The markers of this statement only (the question's own are in "문제보기"). On narrow screens they
+          sit on their own line above the statement, at the right. */}
       <div className="flex flex-col-reverse items-end gap-1 md:flex-row md:items-start md:justify-between md:gap-3">
         <p className="w-full text-base leading-relaxed md:w-auto md:text-sm">{item.statement}</p>
         <div className="shrink-0">
-          <QuestionMarkerBox questionId={item.question.id} />
+          <OxStatementMarkerBox statementKey={item.key} />
         </div>
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-2">

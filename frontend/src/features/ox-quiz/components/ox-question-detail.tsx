@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
 import { ExplanationPanel } from '@/components/explanation-panel'
 import { QuestionChoiceReadout } from '@/components/question-choice-readout'
+import { QuestionMarkerBox } from '@/components/question-marker-box'
 import { QuestionStem } from '@/components/question-stem'
 import { Button } from '@/components/ui/button'
 import { useToggledExplanation } from '@/features/ox-quiz/utils/use-toggled-explanation'
@@ -22,9 +23,12 @@ export function OxQuestionDetail({ id, question, choiceIndex }: OxQuestionDetail
 
   return (
     <div id={id} className="mt-3 flex flex-col gap-3 rounded-lg border bg-muted/30 p-3">
-      <p className="text-xs text-muted-foreground">
-        {question.year}년 {question.round}회 {question.number}번 · {getQuestionSection(question)}
-      </p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs text-muted-foreground">
+          {question.year}년 {question.round}회 {question.number}번 · {getQuestionSection(question)}
+        </p>
+        <QuestionMarkerBox questionId={question.id} />
+      </div>
       <QuestionStem stem={question.stem} imageUrl={question.image_url} />
       <QuestionChoiceReadout choices={question.choices} highlightIndex={choiceIndex} highlightLabel="이 보기" />
       <Button

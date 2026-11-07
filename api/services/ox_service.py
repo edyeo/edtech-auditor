@@ -87,6 +87,29 @@ class OxService:
             )
         return response.model_copy(update={"stats": stats})
 
+    async def all_verdicts(self, session: AsyncSession | None) -> dict[str, bool]:
+        """Truth value of every statement, keyed "question_id#statement_index", with admin corrections applied."""
+        derived = [qid for qid in self._repository.list_ids() if isinstance(self._repository.entry(qid), str)]
+        resolved = await self._questions.resolve(session, derived) if derived else {}
+        verdicts: dict[str, bool] = {}
+        for question_id in self._repository.list_ids():
+            entry = self._repository.entry(question_id)
+            if isinstance(entry, str):
+                question = resolved[question_id]
+                keys = {question.answer_index, *question.also_correct}
+                for index in range(len(question.choices)):
+                    verdicts[f"{question_id}#{index}"] = (index in keys) == (entry == "positive")
+            elif entry is not None:
+                for index, item in enumerate(entry):
+                    verdicts[f"{question_id}#{index}"] = item.is_true
+        return verdicts
+
+    async def judge(
+        self, session: AsyncSession | None, question_id: str, statement_index: int, answer: OxAnswer
+    ) -> OxCheckResponse:
+        """Grade one statement without counting it."""
+        return await self._judge(session, question_id, statement_index, answer)
+
     async def _judge(
         self, session: AsyncSession | None, question_id: str, statement_index: int, answer: OxAnswer
     ) -> OxCheckResponse:

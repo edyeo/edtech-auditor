@@ -436,3 +436,106 @@ async def test_saving_an_active_word_again_changes_nothing(client, learner):
     first = (await add_term(client, learner, "주경로")).json()
     second = (await add_term(client, learner, "주경로")).json()
     assert second["active"] is True and second["updated_at"] == first["updated_at"]
+
+
+# ---- answers graded in the browser and counted in batches ---------------------------------------------
+
+
+def question_item(question_id, selected, attempt_id=None):
+    return {"kind": "question", "id": str(attempt_id or uuid.uuid4()), "question_id": question_id, "selected_index": selected}
+
+
+def ox_item(question_id, index, answer, attempt_id=None):
+    return {
+        "kind": "ox",
+        "id": str(attempt_id or uuid.uuid4()),
+        "question_id": question_id,
+        "statement_index": index,
+        "answer": answer,
+    }
+
+
+async def send_answers(client, learner, attempts, review=None):
+    return await client.post("/api/learner/answers", headers=learner, json={"attempts": attempts, "review": review or {}})
+
+
+async def test_the_answer_key_lists_every_question_and_every_ox_statement(client):
+    response = await client.get("/api/answer-key")
+    assert response.status_code == 200 and "max-age" in response.headers["cache-control"]
+    key = response.json()
+    assert key["questions"][Q1] == [1]  # 2021-22-01: the correct choice is index 1
+    assert key["questions"][Q94] == [1, 2]  # multiple-answer question: every accepted index
+    assert len(key["questions"]) == len((await client.get("/api/questions")).json())
+    assert key["ox"][f"{OX_QUESTION}#0"] in (True, False) and len(key["ox"]) > 900
+
+
+async def test_the_answer_key_follows_an_admin_correction(client, admin):
+    assert (await client.put(f"/api/admin/questions/{Q1}/answer", headers=admin, json={"answer_indexes": [3]})).status_code == 200
+    try:
+        assert (await client.get("/api/answer-key")).json()["questions"][Q1] == [3]
+    finally:
+        await client.delete(f"/api/admin/questions/{Q1}/answer", headers=admin)
+
+
+async def test_a_batch_counts_each_answer_and_adds_markers_for_wrong_ones(client, learner):
+    sent = await send_answers(client, learner, [question_item(Q1, 0), question_item(Q1, 1), question_item(Q1, 2)])
+    assert sent.json() == {"applied": 3, "duplicates": 0}
+    state = (await client.get("/api/learner/state", headers=learner)).json()
+    assert state["stats"][Q1] == {**state["stats"][Q1], "attempts": 3, "wrong": 2, "streak": 1}
+    assert state["marks"][Q1]["count"] == 2 and state["marks"][Q1]["source"] == "auto"  # a marker per wrong answer
+
+
+async def test_a_batch_sent_twice_is_counted_once(client, learner):
+    items = [question_item(Q1, 0), ox_item(OX_QUESTION, 0, "O")]
+    assert (await send_answers(client, learner, items)).json() == {"applied": 2, "duplicates": 0}
+    assert (await send_answers(client, learner, items)).json() == {"applied": 0, "duplicates": 2}
+    state = (await client.get("/api/learner/state", headers=learner)).json()
+    assert state["stats"][Q1]["attempts"] == 1 and state["ox_stats"][f"{OX_QUESTION}#0"]["attempts"] == 1
+
+
+async def test_the_same_answer_id_twice_in_one_batch_is_counted_once(client, learner):
+    attempt_id = uuid.uuid4()
+    sent = await send_answers(client, learner, [question_item(Q1, 0, attempt_id), question_item(Q1, 0, attempt_id)])
+    assert sent.json() == {"applied": 1, "duplicates": 1}
+
+
+async def test_the_server_grades_the_answers_itself(client, learner):
+    await send_answers(client, learner, [question_item(Q1, 1)])  # the correct choice
+    state = (await client.get("/api/learner/state", headers=learner)).json()
+    assert state["stats"][Q1]["wrong"] == 0 and state["marks"] == {}
+
+
+async def test_ox_answers_in_a_batch_use_the_verdict_and_count_wrong_ones(client, learner):
+    verdicts = {i: (await verdict_of(client, OX_QUESTION, i)) for i in range(2)}
+    wrong_for_0 = "X" if verdicts[0] else "O"
+    await send_answers(client, learner, [ox_item(OX_QUESTION, 0, wrong_for_0), ox_item(OX_QUESTION, 1, "O" if verdicts[1] else "X")])
+    stats = (await client.get("/api/learner/state", headers=learner)).json()["ox_stats"]
+    assert stats[f"{OX_QUESTION}#0"]["wrong"] == 1 and stats[f"{OX_QUESTION}#1"]["wrong"] == 0
+
+
+async def verdict_of(client, question_id, index):
+    return (await client.get("/api/answer-key")).json()["ox"][f"{question_id}#{index}"]
+
+
+async def test_review_boxes_in_a_batch_are_saved(client, learner):
+    review = {Q1: {"box_level": 2, "due_at": "2030-01-01", "last_confidence": "medium", "last_correct": True, "attempts": 2, "overconfident_miss": False}}
+    await send_answers(client, learner, [], review)
+    state = (await client.get("/api/learner/state", headers=learner)).json()
+    assert state["review"][Q1]["box_level"] == 2
+
+
+async def test_a_bad_batch_changes_nothing(client, learner):
+    bad = await send_answers(client, learner, [question_item(Q1, 0), question_item("nope", 0)])
+    assert bad.status_code == 404
+    unknown_statement = await send_answers(client, learner, [question_item(Q1, 0), ox_item(OX_QUESTION, 99, "O")])
+    assert unknown_statement.status_code == 422
+    state = (await client.get("/api/learner/state", headers=learner)).json()
+    assert state["stats"] == {} and state["marks"] == {}  # the whole batch is refused, so a retry cannot double count
+    assert (await send_answers(client, learner, [question_item(Q1, 9)])).status_code == 422
+    assert (await client.post("/api/learner/answers", json={"attempts": []})).status_code == 401
+
+
+async def test_a_batch_is_limited_in_size(client, learner):
+    too_many = [question_item(Q1, 1) for _ in range(201)]
+    assert (await send_answers(client, learner, too_many)).status_code == 422
+    assert (await send_answers(client, learner, [question_item(Q1, 1) for _ in range(200)])).json()["applied"] == 200

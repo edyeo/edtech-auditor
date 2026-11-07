@@ -9,6 +9,8 @@ from api.errors import VocabularyImageTooLargeError
 from api.models.learner import (
     MAX_IMAGE_BYTES,
     AddVocabularyRequest,
+    AttemptBatchRequest,
+    AttemptBatchResponse,
     AttemptRequest,
     AttemptResponse,
     LearnerState,
@@ -159,6 +161,14 @@ async def remove_vocabulary_image(image_id: UUID, learner_id: LearnerId, service
 @router.post("/attempts", response_model=AttemptResponse)
 async def record_attempt(attempt: AttemptRequest, learner_id: LearnerId, service: Service) -> AttemptResponse:
     return await service.record_attempt(learner_id, attempt)
+
+
+@router.post("/answers", response_model=AttemptBatchResponse)
+async def apply_answers(
+    batch: AttemptBatchRequest, learner_id: LearnerId, service: Service
+) -> AttemptBatchResponse:
+    """Count answers graded in the browser (question and O/X ones) and save the review boxes that changed."""
+    return await service.apply_attempts(learner_id, batch)
 
 
 @router.put("/review/{question_id}", status_code=204)

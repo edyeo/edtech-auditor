@@ -48,6 +48,15 @@ class AnswerCheckResponse(BaseModel):
     is_correct: bool
 
 
+class AnswerKeyResponse(BaseModel):
+    """The answer key for browser-side grading: correct choice indexes per question (the first is the main
+    answer, the rest are also accepted) and the truth value of every O/X statement."""
+
+    questions: dict[str, list[int]]
+    ox: dict[str, bool]
+    """Keyed "question_id#statement_index"."""
+
+
 class AdminQuestion(Question):
     """Full question record for the admin screen, flagged when its answer was edited by hand."""
 

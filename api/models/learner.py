@@ -1,5 +1,6 @@
 from datetime import date, datetime
-from typing import Literal
+from typing import Annotated, Literal
+from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -139,6 +140,45 @@ class LearnerState(BaseModel):
     """Saved words keyed by their lower-cased term."""
     choice_marks: dict[str, MarkOut]
     """Markers on single answer choices, keyed "question_id#choice_index"; separate from `marks` and `ox_marks`."""
+
+
+MAX_ATTEMPTS_PER_BATCH = 200
+
+
+class QuestionAttemptItem(BaseModel):
+    """One answer to a question, graded in the browser and counted here."""
+
+    kind: Literal["question"] = "question"
+    id: UUID
+    """Made by the browser; a batch sent twice counts each answer once."""
+    question_id: str
+    selected_index: int = Field(ge=0, le=3)
+
+
+class OxAttemptItem(BaseModel):
+    """One O/X answer, graded in the browser and counted here."""
+
+    kind: Literal["ox"]
+    id: UUID
+    question_id: str
+    statement_index: int = Field(ge=0)
+    answer: Literal["O", "X"]
+
+
+AttemptItem = Annotated[QuestionAttemptItem | OxAttemptItem, Field(discriminator="kind")]
+
+
+class AttemptBatchRequest(BaseModel):
+    """Answers in the order they were given, plus the review boxes that changed (the last one per question wins)."""
+
+    attempts: list[AttemptItem] = Field(default_factory=list, max_length=MAX_ATTEMPTS_PER_BATCH)
+    review: dict[str, ReviewState] = Field(default_factory=dict, max_length=MAX_ATTEMPTS_PER_BATCH)
+
+
+class AttemptBatchResponse(BaseModel):
+    applied: int
+    """Answers counted now; the rest had been counted by an earlier send."""
+    duplicates: int
 
 
 class MarkRemovedResponse(BaseModel):

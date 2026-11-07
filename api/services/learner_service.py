@@ -4,6 +4,8 @@ from uuid import UUID, uuid4, uuid5
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.models.learner import (
+    AttemptBatchRequest,
+    AttemptBatchResponse,
     AttemptRequest,
     AttemptResponse,
     MAX_MARK_COUNT,
@@ -39,6 +41,7 @@ from api.errors import (
     VocabularyImageTooLargeError,
     VocabularyTermNotFoundError,
 )
+from api.services.ox_service import OxService
 from api.services.question_service import QuestionService
 
 # Wrong answers in a row from which the UI flags a question. Marking does not wait for it: every
@@ -68,6 +71,7 @@ class LearnerService:
         self._repo = LearnerRepository(session)
         self._bank = QuestionRepository()
         self._ox = OxQuestionRepository()
+        self._ox_service = OxService(questions=self._questions)
 
     # ---- reads -------------------------------------------------------------------------------
 
@@ -198,6 +202,38 @@ class LearnerService:
             )
             stats, mark = await self._apply_attempt(learner_id, attempt.question_id, check.is_correct)
         return AttemptResponse(check=check, stats=stats, mark=mark, auto_marked=mark is not None)
+
+    async def apply_attempts(self, learner_id: UUID, batch: AttemptBatchRequest) -> AttemptBatchResponse:
+        """Count answers that were graded in the browser. Each answer is graded again here from the answer key, so
+        the counts cannot be inflated by a made-up verdict; an answer id seen before is skipped."""
+        for question_id in {*(a.question_id for a in batch.attempts), *batch.review}:
+            self._require_question(question_id)
+        async with self._session.begin():
+            fresh = await self._repo.claim_attempts(learner_id, [a.id for a in batch.attempts])
+            questions = await self._questions.resolve(
+                self._session, [a.question_id for a in batch.attempts if a.kind == "question"]
+            )
+            applied = 0
+            for item in batch.attempts:
+                if item.id not in fresh:
+                    continue
+                fresh.discard(item.id)  # the same id twice in one batch is one answer
+                applied += 1
+                if item.kind == "question":
+                    question = questions[item.question_id]
+                    is_correct = item.selected_index in {question.answer_index, *question.also_correct}
+                    await self._apply_attempt(learner_id, item.question_id, is_correct)
+                else:
+                    verdict = await self._ox_service.judge(
+                        self._session, item.question_id, item.statement_index, item.answer
+                    )
+                    await self._repo.record_ox_attempt(
+                        learner_id, item.question_id, item.statement_index, verdict.is_correct
+                    )
+            for question_id, state in batch.review.items():
+                await self._repo.upsert_review(learner_id, question_id, state)
+            await self._repo.prune_attempts(learner_id)
+        return AttemptBatchResponse(applied=applied, duplicates=len(batch.attempts) - applied)
 
     async def submit_mini_test(self, learner_id: UUID, request: MiniTestSubmitRequest) -> MiniTestSubmitResponse:
         """Grade every answer, update stats/auto-marks and store the test - all or nothing."""

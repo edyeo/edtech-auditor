@@ -24,7 +24,7 @@ from api.errors import (
     VocabularyImageTooLargeError,
     VocabularyTermNotFoundError,
 )
-from api.routers import admin, explain, learner, ox, questions
+from api.routers import admin, answer_key, explain, learner, ox, questions
 
 QUESTION_IMAGES_DIR = Path(__file__).resolve().parent / "data" / "images"
 
@@ -41,6 +41,7 @@ app.include_router(questions.router)
 app.include_router(explain.router)
 app.include_router(admin.router)
 app.include_router(learner.router)
+app.include_router(answer_key.router)
 app.include_router(ox.router)
 
 # Domain errors map to HTTP here so services only raise domain exceptions.

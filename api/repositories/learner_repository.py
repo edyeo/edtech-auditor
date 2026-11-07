@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 from sqlalchemy import delete, func, select, text
@@ -6,6 +6,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.db.tables import (
+    applied_attempts,
     choice_marks,
     mini_test_items,
     mini_test_records,
@@ -453,6 +454,30 @@ class LearnerRepository:
             delete(vocabulary_images).where(vocabulary_images.c.id == image_id, vocabulary_images.c.learner_id == learner_id)
         )
         return result.rowcount > 0
+
+    # ---- answers sent in batches -------------------------------------------------------------
+
+    async def claim_attempts(self, learner_id: UUID, attempt_ids: list[UUID]) -> set[UUID]:
+        """Remember these answer ids; returns the ones not seen before (the rest were counted by an earlier send)."""
+        if not attempt_ids:
+            return set()
+        now = datetime.now(UTC)
+        rows = await self._session.execute(
+            insert(applied_attempts)
+            .values([{"learner_id": learner_id, "attempt_id": i, "applied_at": now} for i in attempt_ids])
+            .on_conflict_do_nothing(index_elements=[applied_attempts.c.learner_id, applied_attempts.c.attempt_id])
+            .returning(applied_attempts.c.attempt_id)
+        )
+        return {r.attempt_id for r in rows}
+
+    async def prune_attempts(self, learner_id: UUID, keep_days: int = 7) -> None:
+        """Answer ids only matter while a retry of their batch is possible."""
+        cutoff = datetime.now(UTC) - timedelta(days=keep_days)
+        await self._session.execute(
+            delete(applied_attempts).where(
+                applied_attempts.c.learner_id == learner_id, applied_attempts.c.applied_at < cutoff
+            )
+        )
 
     # ---- stats -------------------------------------------------------------------------------
 

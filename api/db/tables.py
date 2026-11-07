@@ -68,6 +68,14 @@ ox_statement_marks = Table(
     Column("marked_at", DateTime(timezone=True), nullable=False),
 )
 
+applied_attempts = Table(
+    "applied_attempts",
+    metadata,
+    Column("learner_id", UUID(as_uuid=True), primary_key=True),
+    Column("attempt_id", UUID(as_uuid=True), primary_key=True),
+    Column("applied_at", DateTime(timezone=True), nullable=False),
+)
+
 choice_marks = Table(
     "choice_marks",
     metadata,

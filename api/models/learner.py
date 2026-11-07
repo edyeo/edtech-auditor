@@ -134,6 +134,8 @@ class LearnerState(BaseModel):
     """Markers on single O/X statements, same key as `ox_stats`; separate from the question's `marks`."""
     vocabulary: dict[str, VocabularyTermOut]
     """Saved words keyed by their lower-cased term."""
+    choice_marks: dict[str, MarkOut]
+    """Markers on single answer choices, keyed "question_id#choice_index"; separate from `marks` and `ox_marks`."""
 
 
 class MarkRemovedResponse(BaseModel):

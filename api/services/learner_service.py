@@ -81,6 +81,7 @@ class LearnerService:
             ox_stats=await self._repo.get_ox_stats(learner_id),
             ox_marks=await self._repo.get_ox_marks(learner_id),
             vocabulary=await self._repo.get_vocabulary(learner_id),
+            choice_marks=await self._repo.get_choice_marks(learner_id),
         )
 
     async def list_mini_tests(self, learner_id: UUID) -> list[MiniTestRecord]:
@@ -107,6 +108,18 @@ class LearnerService:
         self._require_statement(question_id, statement_index)
         async with self._session.begin():
             return await self._repo.set_ox_mark_count(learner_id, question_id, statement_index, count)
+
+    async def set_choice_mark_count(
+        self, learner_id: UUID, question_id: str, choice_index: int, count: int
+    ) -> MarkOut:
+        self._require_choice(question_id, choice_index)
+        async with self._session.begin():
+            return await self._repo.set_choice_mark_count(learner_id, question_id, choice_index, count)
+
+    async def remove_choice_mark(self, learner_id: UUID, question_id: str, choice_index: int) -> None:
+        self._require_choice(question_id, choice_index)
+        async with self._session.begin():
+            await self._repo.remove_choice_mark(learner_id, question_id, choice_index)
 
     async def remove_ox_mark(self, learner_id: UUID, question_id: str, statement_index: int) -> None:
         self._require_statement(question_id, statement_index)
@@ -270,6 +283,13 @@ class LearnerService:
                     )
             await self._repo.trim_mini_tests(learner_id)
         return True
+
+    def _require_choice(self, question_id: str, choice_index: int) -> None:
+        question = self._bank.get_by_id(question_id)
+        if question is None:
+            raise QuestionNotFoundError(question_id)
+        if choice_index >= len(question.choices):
+            raise InvalidAnswerError()
 
     def _require_statement(self, question_id: str, statement_index: int) -> None:
         """The statement must exist in the O/X set (a bare polarity plays every choice of the question)."""

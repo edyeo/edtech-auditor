@@ -375,3 +375,42 @@ async def test_a_note_holds_at_most_three_images(client, learner):
     assert (await upload(client, learner, "주경로")).status_code == 409
     await add_term(client, learner, "다른 단어")
     assert (await upload(client, learner, "다른 단어")).status_code == 200  # the limit is per note
+
+
+# ---- markers on single answer choices ---------------------------------------------------------------
+
+
+async def put_choice_mark(client, learner, question_id, choice_index, count):
+    return await client.put(
+        f"/api/learner/choice-marks/{question_id}/{choice_index}", headers=learner, json={"count": count}
+    )
+
+
+async def test_choice_markers_are_separate_from_question_and_statement_markers(client, learner):
+    assert (await put_choice_mark(client, learner, Q1, 2, 3)).json()["count"] == 3
+    assert (await put_choice_mark(client, learner, Q1, 2, 1)).json()["count"] == 1  # set, not added
+    await client.put(f"/api/learner/marks/{Q1}", headers=learner, json={"count": 4})
+
+    state = (await client.get("/api/learner/state", headers=learner)).json()
+    assert state["choice_marks"][f"{Q1}#2"]["count"] == 1 and list(state["choice_marks"]) == [f"{Q1}#2"]
+    assert state["marks"][Q1]["count"] == 4 and state["ox_marks"] == {}
+
+    assert (await client.delete(f"/api/learner/choice-marks/{Q1}/2", headers=learner)).status_code == 204
+    state = (await client.get("/api/learner/state", headers=learner)).json()
+    assert state["choice_marks"] == {} and state["marks"][Q1]["count"] == 4
+
+
+async def test_choice_markers_belong_to_one_account(client):
+    alice = {"Authorization": f"Bearer {access_token()}"}
+    bob = {"Authorization": f"Bearer {access_token()}"}
+    await put_choice_mark(client, alice, Q1, 0, 2)
+    assert (await client.get("/api/learner/state", headers=bob)).json()["choice_marks"] == {}
+
+
+async def test_choice_marker_input_is_validated(client, learner):
+    for bad in (0, 6, -1):
+        assert (await put_choice_mark(client, learner, Q1, 0, bad)).status_code == 422
+    assert (await put_choice_mark(client, learner, Q1, 4, 1)).status_code == 422  # a question has four choices
+    assert (await put_choice_mark(client, learner, Q1, -1, 1)).status_code == 422
+    assert (await put_choice_mark(client, learner, "nope", 0, 1)).status_code == 404
+    assert (await client.put(f"/api/learner/choice-marks/{Q1}/0", json={"count": 1})).status_code == 401

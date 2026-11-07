@@ -81,6 +81,25 @@ async def remove_ox_mark(
     await service.remove_ox_mark(learner_id, question_id, statement_index)
 
 
+@router.put("/choice-marks/{question_id}/{choice_index}", response_model=MarkOut)
+async def set_choice_mark(
+    question_id: str,
+    choice_index: Annotated[int, Path(ge=0)],
+    payload: SetMarkRequest,
+    learner_id: LearnerId,
+    service: Service,
+) -> MarkOut:
+    """Set how many markers one answer choice carries (1-5); DELETE removes them all."""
+    return await service.set_choice_mark_count(learner_id, question_id, choice_index, payload.count)
+
+
+@router.delete("/choice-marks/{question_id}/{choice_index}", status_code=204)
+async def remove_choice_mark(
+    question_id: str, choice_index: Annotated[int, Path(ge=0)], learner_id: LearnerId, service: Service
+) -> None:
+    await service.remove_choice_mark(learner_id, question_id, choice_index)
+
+
 @router.post("/vocabulary", response_model=VocabularyTermOut)
 async def add_vocabulary_term(
     payload: AddVocabularyRequest, learner_id: LearnerId, service: Service

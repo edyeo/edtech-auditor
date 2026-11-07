@@ -68,6 +68,16 @@ ox_statement_marks = Table(
     Column("marked_at", DateTime(timezone=True), nullable=False),
 )
 
+choice_marks = Table(
+    "choice_marks",
+    metadata,
+    Column("learner_id", UUID(as_uuid=True), primary_key=True),
+    Column("question_id", Text, primary_key=True),
+    Column("choice_index", SmallInteger, primary_key=True),
+    Column("mark_count", SmallInteger, nullable=False),
+    Column("marked_at", DateTime(timezone=True), nullable=False),
+)
+
 vocabulary_terms = Table(
     "vocabulary_terms",
     metadata,

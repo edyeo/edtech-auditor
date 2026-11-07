@@ -6,6 +6,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.db.tables import (
+    choice_marks,
     mini_test_items,
     mini_test_records,
     ox_statement_marks,
@@ -122,6 +123,20 @@ class LearnerRepository:
             updated_at=row.updated_at,
         )
 
+    async def get_choice_marks(self, learner_id: UUID) -> dict[str, MarkOut]:
+        rows = await self._session.execute(
+            select(
+                choice_marks.c.question_id,
+                choice_marks.c.choice_index,
+                choice_marks.c.marked_at,
+                choice_marks.c.mark_count,
+            ).where(choice_marks.c.learner_id == learner_id)
+        )
+        return {
+            f"{r.question_id}#{r.choice_index}": MarkOut(marked_at=r.marked_at, source="manual", count=r.mark_count)
+            for r in rows
+        }
+
     async def get_review(self, learner_id: UUID) -> dict[str, ReviewState]:
         rows = await self._session.execute(select(review_states).where(review_states.c.learner_id == learner_id))
         return {
@@ -177,7 +192,7 @@ class LearnerRepository:
 
     async def has_any_data(self, learner_id: UUID) -> bool:
         for table in (
-            question_marks, question_stats, review_states, mini_test_records, ox_statement_stats, ox_statement_marks, vocabulary_terms
+            question_marks, question_stats, review_states, mini_test_records, ox_statement_stats, ox_statement_marks, choice_marks, vocabulary_terms
         ):
             count = await self._session.scalar(
                 select(func.count()).select_from(table).where(table.c.learner_id == learner_id)
@@ -264,6 +279,33 @@ class LearnerRepository:
         ).returning(ox_statement_marks.c.marked_at, ox_statement_marks.c.mark_count)
         row = (await self._session.execute(stmt)).one()
         return MarkOut(marked_at=row.marked_at, source="manual", count=row.mark_count)
+
+    async def set_choice_mark_count(
+        self, learner_id: UUID, question_id: str, choice_index: int, count: int
+    ) -> MarkOut:
+        """Set the marker count of one answer choice; an existing mark keeps its original date."""
+        stmt = insert(choice_marks).values(
+            learner_id=learner_id,
+            question_id=question_id,
+            choice_index=choice_index,
+            mark_count=count,
+            marked_at=datetime.now(UTC),
+        )
+        stmt = stmt.on_conflict_do_update(
+            index_elements=[choice_marks.c.learner_id, choice_marks.c.question_id, choice_marks.c.choice_index],
+            set_={"mark_count": count},
+        ).returning(choice_marks.c.marked_at, choice_marks.c.mark_count)
+        row = (await self._session.execute(stmt)).one()
+        return MarkOut(marked_at=row.marked_at, source="manual", count=row.mark_count)
+
+    async def remove_choice_mark(self, learner_id: UUID, question_id: str, choice_index: int) -> None:
+        await self._session.execute(
+            delete(choice_marks).where(
+                choice_marks.c.learner_id == learner_id,
+                choice_marks.c.question_id == question_id,
+                choice_marks.c.choice_index == choice_index,
+            )
+        )
 
     async def remove_ox_mark(self, learner_id: UUID, question_id: str, statement_index: int) -> None:
         await self._session.execute(

@@ -59,7 +59,16 @@ export function MiniTestRun({ questions, isSubmitting, error, onSubmit }: MiniTe
           selectedIndex={answers[question.id] ?? null}
           correctIndex={null}
           correctIndexes={[]}
-          onSelect={(choice) => setAnswers((current) => ({ ...current, [question.id]: choice }))}
+          onSelect={(choice) =>
+            setAnswers((current) => {
+              // Picking the chosen choice again takes the answer back.
+              if (current[question.id] === choice) {
+                const { [question.id]: _removed, ...rest } = current
+                return rest
+              }
+              return { ...current, [question.id]: choice }
+            })
+          }
         />
         {error && <p className="text-sm text-red-500">{error}</p>}
       </CardContent>

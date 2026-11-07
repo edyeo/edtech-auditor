@@ -58,7 +58,8 @@ export function useQuestionAttempt(question: QuestionPublic | null) {
   const selectChoice = useCallback(
     (index: number) => {
       if (correctIndex !== null) return
-      setSelectedIndex(index)
+      // Picking the chosen choice again puts it back to "not chosen".
+      setSelectedIndex((current) => (current === index ? null : index))
     },
     [correctIndex],
   )

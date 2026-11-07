@@ -33,6 +33,7 @@ export function QuestionChoiceList({
             <button
               type="button"
               disabled={isChecked}
+              aria-pressed={isSelected}
               // Dragging over the text to select a word also ends in a click; that must not pick the choice.
               onClick={() => {
                 if (!window.getSelection()?.toString()) onSelect(index)
@@ -41,7 +42,8 @@ export function QuestionChoiceList({
                 'flex min-w-0 flex-1 items-start gap-3 rounded-lg border px-4 py-3 text-left text-base transition-colors md:text-sm',
                 'disabled:cursor-default',
                 !isChecked && 'hover:bg-accent/50',
-                !isChecked && isSelected && 'border-primary bg-accent',
+                // The picked choice is red before grading too (the same red as a wrong pick afterwards).
+                !isChecked && isSelected && 'border-red-500 bg-red-500/10',
                 !isChecked && !isSelected && 'border-border',
                 isChecked && isCorrectChoice && 'border-emerald-500 bg-emerald-500/10',
                 isChecked && isSelected && !isCorrectChoice && 'border-red-500 bg-red-500/10',

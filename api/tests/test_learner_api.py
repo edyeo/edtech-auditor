@@ -414,3 +414,25 @@ async def test_choice_marker_input_is_validated(client, learner):
     assert (await put_choice_mark(client, learner, Q1, -1, 1)).status_code == 422
     assert (await put_choice_mark(client, learner, "nope", 0, 1)).status_code == 404
     assert (await client.put(f"/api/learner/choice-marks/{Q1}/0", json={"count": 1})).status_code == 401
+
+
+async def test_a_word_can_be_switched_off_and_saving_it_again_switches_it_on(client, learner):
+    saved = (await add_term(client, learner, "주경로")).json()
+    assert saved["active"] is True
+    await client.patch("/api/learner/vocabulary", headers=learner, json={"term": "주경로", "memo": "가장 긴 경로"})
+    await upload(client, learner, "주경로")
+
+    off = (await client.patch("/api/learner/vocabulary", headers=learner, json={"term": "주경로", "active": False})).json()
+    assert off["active"] is False and off["memo"] == "가장 긴 경로" and len(off["images"]) == 1  # kept, not deleted
+    state = (await client.get("/api/learner/state", headers=learner)).json()
+    assert state["vocabulary"]["주경로"]["active"] is False
+
+    again = (await add_term(client, learner, "주경로", Q2)).json()  # saved again from another question
+    assert again["active"] is True and again["memo"] == "가장 긴 경로" and again["source_question_id"] == Q1
+    assert len(again["images"]) == 1
+
+
+async def test_saving_an_active_word_again_changes_nothing(client, learner):
+    first = (await add_term(client, learner, "주경로")).json()
+    second = (await add_term(client, learner, "주경로")).json()
+    assert second["active"] is True and second["updated_at"] == first["updated_at"]

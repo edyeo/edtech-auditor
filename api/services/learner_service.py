@@ -143,10 +143,16 @@ class LearnerService:
             return await self._repo.add_term(learner_id, term, source_question_id, section or None)
 
     async def update_term(
-        self, learner_id: UUID, term: str, memo: str | None, studied: bool | None, section: str | None = None
+        self,
+        learner_id: UUID,
+        term: str,
+        memo: str | None,
+        studied: bool | None,
+        section: str | None = None,
+        active: bool | None = None,
     ) -> VocabularyTermOut:
         async with self._session.begin():
-            updated = await self._repo.update_term(learner_id, term, memo, studied, section)
+            updated = await self._repo.update_term(learner_id, term, memo, studied, section, active)
         if updated is None:
             raise VocabularyTermNotFoundError()
         return updated

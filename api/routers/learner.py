@@ -113,7 +113,9 @@ async def update_vocabulary_term(
     payload: UpdateVocabularyRequest, learner_id: LearnerId, service: Service
 ) -> VocabularyTermOut:
     """Change the memo and/or the studied flag of a saved word."""
-    return await service.update_term(learner_id, payload.term, payload.memo, payload.studied, payload.section)
+    return await service.update_term(
+        learner_id, payload.term, payload.memo, payload.studied, payload.section, payload.active
+    )
 
 
 @router.delete("/vocabulary", status_code=204)

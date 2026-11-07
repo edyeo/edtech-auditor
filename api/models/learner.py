@@ -50,6 +50,8 @@ class VocabularyTermOut(BaseModel):
     memo: str
     """The note, written in Markdown."""
     studied: bool
+    active: bool
+    """Switched off words are kept but not highlighted; saving the word again switches it on."""
     source_question_id: str | None
     """The question the term was first selected in."""
     section: str | None
@@ -79,6 +81,7 @@ class AddVocabularyRequest(_TermRequest):
 class UpdateVocabularyRequest(_TermRequest):
     memo: str | None = Field(default=None, max_length=MAX_MEMO_LENGTH)
     studied: bool | None = None
+    active: bool | None = None
     section: str | None = Field(default=None, max_length=MAX_SECTION_LENGTH)
     """Change the section; an empty string clears it."""
 

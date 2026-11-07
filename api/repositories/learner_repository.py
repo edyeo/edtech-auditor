@@ -116,6 +116,7 @@ class LearnerRepository:
             term=row.term,
             memo=row.memo,
             studied=row.studied,
+            active=row.active,
             source_question_id=row.source_question_id,
             section=row.section,
             images=images,
@@ -329,7 +330,8 @@ class LearnerRepository:
     async def add_term(
         self, learner_id: UUID, term: str, source_question_id: str | None, section: str | None
     ) -> VocabularyTermOut:
-        """Save the term, or return the one already saved (its memo and study state stay as they are)."""
+        """Save the term, or return the one already saved: its memo and study state stay as they are, and a
+        word that was switched off is switched on again."""
         now = datetime.now(UTC)
         key = term_key(term)
         await self._session.execute(
@@ -340,12 +342,17 @@ class LearnerRepository:
                 term=term,
                 memo="",
                 studied=False,
+                active=True,
                 source_question_id=source_question_id,
                 section=section,
                 created_at=now,
                 updated_at=now,
             )
-            .on_conflict_do_nothing(index_elements=[vocabulary_terms.c.learner_id, vocabulary_terms.c.term_key])
+            .on_conflict_do_update(
+                index_elements=[vocabulary_terms.c.learner_id, vocabulary_terms.c.term_key],
+                set_={"active": True, "updated_at": now},
+                where=vocabulary_terms.c.active.is_(False),
+            )
         )
         row = (
             await self._session.execute(
@@ -357,7 +364,13 @@ class LearnerRepository:
         return self._to_term(row, (await self._image_list(learner_id, key)).get(key, []))
 
     async def update_term(
-        self, learner_id: UUID, term: str, memo: str | None, studied: bool | None, section: str | None
+        self,
+        learner_id: UUID,
+        term: str,
+        memo: str | None,
+        studied: bool | None,
+        section: str | None,
+        active: bool | None = None,
     ) -> VocabularyTermOut | None:
         """Change only the given fields (an empty section clears it); None when the term is not saved."""
         values: dict[str, object] = {"updated_at": datetime.now(UTC)}
@@ -365,6 +378,8 @@ class LearnerRepository:
             values["memo"] = memo
         if studied is not None:
             values["studied"] = studied
+        if active is not None:
+            values["active"] = active
         if section is not None:
             values["section"] = section or None
         row = (

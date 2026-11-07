@@ -86,6 +86,7 @@ vocabulary_terms = Table(
     Column("term", Text, nullable=False),
     Column("memo", Text, nullable=False),
     Column("studied", Boolean, nullable=False),
+    Column("active", Boolean, nullable=False),
     Column("source_question_id", Text),
     Column("section", Text),
     Column("created_at", DateTime(timezone=True), nullable=False),

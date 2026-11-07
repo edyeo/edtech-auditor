@@ -90,6 +90,18 @@ export function OxStatementRow({ item, result, isPending, stats, onAnswer }: OxS
           >
             {isOpen ? '문제닫기' : '문제보기'}
           </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={!explanation.isOpen && !isOpen}
+            onClick={() => {
+              explanation.close()
+              setIsOpen(false)
+            }}
+            className="h-11 md:h-8"
+          >
+            모두 닫기
+          </Button>
         </div>
       </div>
       {explanation.isOpen && (

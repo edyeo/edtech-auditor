@@ -25,5 +25,7 @@ export function useToggledExplanation(load: () => Promise<string>) {
     }
   }, [isOpen, text, isLoading, load])
 
-  return { isOpen, text, isLoading, error, toggle }
+  const close = useCallback(() => setIsOpen(false), [])
+
+  return { isOpen, text, isLoading, error, toggle, close }
 }

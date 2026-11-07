@@ -17,6 +17,8 @@ from api.errors import (
     InvalidAnswerError,
     InvalidTokenError,
     QuestionNotFoundError,
+    VocabularyFullError,
+    VocabularyTermNotFoundError,
 )
 from api.routers import admin, explain, learner, ox, questions
 
@@ -43,6 +45,8 @@ _DOMAIN_ERRORS: dict[type[Exception], tuple[int, str]] = {
     AdminAuthError: (401, "invalid admin token"),
     InvalidAnswerError: (422, "answer references a choice the question does not have"),
     QuestionNotFoundError: (404, "question not found"),
+    VocabularyTermNotFoundError: (404, "vocabulary term not found"),
+    VocabularyFullError: (409, "vocabulary is full"),
     ExplanationUnavailableError: (502, "explanation provider is unavailable"),
     InvalidTokenError: (401, "sign in required"),
     AuthNotConfiguredError: (503, "auth is not configured"),

@@ -67,6 +67,19 @@ ox_statement_marks = Table(
     Column("marked_at", DateTime(timezone=True), nullable=False),
 )
 
+vocabulary_terms = Table(
+    "vocabulary_terms",
+    metadata,
+    Column("learner_id", UUID(as_uuid=True), primary_key=True),
+    Column("term_key", Text, primary_key=True),
+    Column("term", Text, nullable=False),
+    Column("memo", Text, nullable=False),
+    Column("studied", Boolean, nullable=False),
+    Column("source_question_id", Text),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+    Column("updated_at", DateTime(timezone=True), nullable=False),
+)
+
 review_states = Table(
     "review_states",
     metadata,

@@ -13,6 +13,7 @@ from api.db.tables import (
     question_marks,
     question_stats,
     review_states,
+    vocabulary_terms,
 )
 from api.models.learner import (
     MAX_MARK_COUNT,
@@ -22,6 +23,8 @@ from api.models.learner import (
     OxStatsOut,
     ReviewState,
     StatsOut,
+    VocabularyTermOut,
+    term_key,
 )
 
 MAX_MINI_TEST_RECORDS = 100
@@ -85,6 +88,21 @@ class LearnerRepository:
             for r in rows
         }
 
+    async def get_vocabulary(self, learner_id: UUID) -> dict[str, VocabularyTermOut]:
+        rows = await self._session.execute(select(vocabulary_terms).where(vocabulary_terms.c.learner_id == learner_id))
+        return {r.term_key: self._to_term(r) for r in rows}
+
+    @staticmethod
+    def _to_term(row) -> VocabularyTermOut:  # noqa: ANN001 - a SQLAlchemy Row
+        return VocabularyTermOut(
+            term=row.term,
+            memo=row.memo,
+            studied=row.studied,
+            source_question_id=row.source_question_id,
+            created_at=row.created_at,
+            updated_at=row.updated_at,
+        )
+
     async def get_review(self, learner_id: UUID) -> dict[str, ReviewState]:
         rows = await self._session.execute(select(review_states).where(review_states.c.learner_id == learner_id))
         return {
@@ -140,7 +158,7 @@ class LearnerRepository:
 
     async def has_any_data(self, learner_id: UUID) -> bool:
         for table in (
-            question_marks, question_stats, review_states, mini_test_records, ox_statement_stats, ox_statement_marks
+            question_marks, question_stats, review_states, mini_test_records, ox_statement_stats, ox_statement_marks, vocabulary_terms
         ):
             count = await self._session.scalar(
                 select(func.count()).select_from(table).where(table.c.learner_id == learner_id)
@@ -234,6 +252,71 @@ class LearnerRepository:
                 ox_statement_marks.c.learner_id == learner_id,
                 ox_statement_marks.c.question_id == question_id,
                 ox_statement_marks.c.statement_index == statement_index,
+            )
+        )
+
+    # ---- vocabulary --------------------------------------------------------------------------------
+
+    async def count_terms(self, learner_id: UUID) -> int:
+        return (
+            await self._session.scalar(
+                select(func.count()).select_from(vocabulary_terms).where(vocabulary_terms.c.learner_id == learner_id)
+            )
+            or 0
+        )
+
+    async def add_term(
+        self, learner_id: UUID, term: str, source_question_id: str | None
+    ) -> VocabularyTermOut:
+        """Save the term, or return the one already saved (its memo and study state stay as they are)."""
+        now = datetime.now(UTC)
+        key = term_key(term)
+        await self._session.execute(
+            insert(vocabulary_terms)
+            .values(
+                learner_id=learner_id,
+                term_key=key,
+                term=term,
+                memo="",
+                studied=False,
+                source_question_id=source_question_id,
+                created_at=now,
+                updated_at=now,
+            )
+            .on_conflict_do_nothing(index_elements=[vocabulary_terms.c.learner_id, vocabulary_terms.c.term_key])
+        )
+        row = (
+            await self._session.execute(
+                select(vocabulary_terms).where(
+                    vocabulary_terms.c.learner_id == learner_id, vocabulary_terms.c.term_key == key
+                )
+            )
+        ).one()
+        return self._to_term(row)
+
+    async def update_term(
+        self, learner_id: UUID, term: str, memo: str | None, studied: bool | None
+    ) -> VocabularyTermOut | None:
+        """Change only the given fields; None when the term is not saved."""
+        values: dict[str, object] = {"updated_at": datetime.now(UTC)}
+        if memo is not None:
+            values["memo"] = memo
+        if studied is not None:
+            values["studied"] = studied
+        row = (
+            await self._session.execute(
+                vocabulary_terms.update()
+                .where(vocabulary_terms.c.learner_id == learner_id, vocabulary_terms.c.term_key == term_key(term))
+                .values(**values)
+                .returning(*vocabulary_terms.c)
+            )
+        ).first()
+        return self._to_term(row) if row else None
+
+    async def remove_term(self, learner_id: UUID, term: str) -> None:
+        await self._session.execute(
+            delete(vocabulary_terms).where(
+                vocabulary_terms.c.learner_id == learner_id, vocabulary_terms.c.term_key == term_key(term)
             )
         )
 

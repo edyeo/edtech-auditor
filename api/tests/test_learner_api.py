@@ -230,3 +230,69 @@ async def test_statement_marker_input_is_validated(client, learner):
     assert (await put_ox_mark(client, learner, Q1, 0, 1)).status_code == 404  # not an O/X question
     assert (await client.put(f"/api/learner/ox-marks/{OX_QUESTION}/0", headers=learner)).status_code == 422
     assert (await client.put(f"/api/learner/ox-marks/{OX_QUESTION}/0", json={"count": 1})).status_code == 401
+
+
+async def add_term(client, learner, term, source=Q1):
+    return await client.post("/api/learner/vocabulary", headers=learner, json={"term": term, "source_question_id": source})
+
+
+async def test_vocabulary_term_is_saved_with_its_source_and_listed_in_the_state(client, learner):
+    saved = (await add_term(client, learner, "  요구정의단계   감리 ")).json()
+    assert saved["term"] == "요구정의단계 감리" and saved["memo"] == "" and saved["studied"] is False
+    assert saved["source_question_id"] == Q1
+
+    state = (await client.get("/api/learner/state", headers=learner)).json()
+    assert state["vocabulary"]["요구정의단계 감리"]["term"] == "요구정의단계 감리"
+
+
+async def test_saving_a_term_again_keeps_the_memo_and_ignores_the_case(client, learner):
+    await add_term(client, learner, "Critical Path")
+    await client.patch("/api/learner/vocabulary", headers=learner, json={"term": "Critical Path", "memo": "가장 긴 경로"})
+    again = (await add_term(client, learner, "critical  path", Q2)).json()
+    assert again["term"] == "Critical Path" and again["memo"] == "가장 긴 경로" and again["source_question_id"] == Q1
+    assert len((await client.get("/api/learner/state", headers=learner)).json()["vocabulary"]) == 1
+
+
+async def test_memo_and_studied_are_changed_independently(client, learner):
+    await add_term(client, learner, "주경로")
+    memo = await client.patch("/api/learner/vocabulary", headers=learner, json={"term": "주경로", "memo": "메모"})
+    assert memo.json()["memo"] == "메모" and memo.json()["studied"] is False
+    studied = await client.patch("/api/learner/vocabulary", headers=learner, json={"term": "주경로", "studied": True})
+    assert studied.json()["memo"] == "메모" and studied.json()["studied"] is True
+    cleared = await client.patch("/api/learner/vocabulary", headers=learner, json={"term": "주경로", "memo": ""})
+    assert cleared.json()["memo"] == "" and cleared.json()["studied"] is True
+
+
+async def test_a_term_can_be_removed_and_each_account_has_its_own_words(client, learner):
+    await add_term(client, learner, "주경로")
+    other = {"Authorization": f"Bearer {access_token()}"}
+    assert (await client.get("/api/learner/state", headers=other)).json()["vocabulary"] == {}
+    assert (await client.delete("/api/learner/vocabulary", headers=other, params={"term": "주경로"})).status_code == 204
+    assert len((await client.get("/api/learner/state", headers=learner)).json()["vocabulary"]) == 1
+    assert (await client.delete("/api/learner/vocabulary", headers=learner, params={"term": "주경로"})).status_code == 204
+    assert (await client.get("/api/learner/state", headers=learner)).json()["vocabulary"] == {}
+
+
+async def test_vocabulary_input_is_validated(client, learner):
+    for bad in ("", "   ", "x" * 101):
+        assert (await add_term(client, learner, bad)).status_code == 422
+    assert (await client.patch("/api/learner/vocabulary", headers=learner, json={"term": "없는 단어"})).status_code == 404
+    await add_term(client, learner, "주경로")
+    too_long = {"term": "주경로", "memo": "m" * 2001}
+    assert (await client.patch("/api/learner/vocabulary", headers=learner, json=too_long)).status_code == 422
+    assert (await client.post("/api/learner/vocabulary", json={"term": "a"})).status_code == 401
+
+
+async def test_an_unknown_source_question_does_not_block_saving(client, learner):
+    saved = await add_term(client, learner, "주경로", source="nope")
+    assert saved.status_code == 200 and saved.json()["source_question_id"] is None
+
+
+async def test_vocabulary_is_limited_per_account(client, learner):
+    from api.models.learner import MAX_VOCABULARY_TERMS
+
+    for start in range(0, MAX_VOCABULARY_TERMS, 25):  # in batches, so the connection pool is not flooded
+        batch = await asyncio.gather(*(add_term(client, learner, f"term-{i}") for i in range(start, start + 25)))
+        assert {r.status_code for r in batch} == {200}, [r.text for r in batch if r.status_code != 200][:1]
+    assert (await add_term(client, learner, "one-too-many")).status_code == 409
+    assert (await add_term(client, learner, "TERM-0")).status_code == 200  # an existing word is not "one more"

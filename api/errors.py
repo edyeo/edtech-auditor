@@ -14,6 +14,14 @@ class InvalidAnswerError(Exception):
     """Raised when an answer update references choices the question doesn't have."""
 
 
+class VocabularyTermNotFoundError(Exception):
+    """Raised when a vocabulary term to update is not in the learner's list."""
+
+
+class VocabularyFullError(Exception):
+    """Raised when the learner already saved the most vocabulary terms allowed."""
+
+
 class DatabaseNotConfiguredError(Exception):
     """Raised when a feature needs Postgres but no DATABASE_URL/POSTGRES_URL is set."""
 

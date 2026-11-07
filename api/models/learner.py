@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from api.models.question import AnswerCheckResponse
 
@@ -22,6 +22,47 @@ class MarkOut(BaseModel):
 
 class SetMarkRequest(BaseModel):
     count: int = Field(ge=1, le=MAX_MARK_COUNT)
+
+
+MAX_VOCABULARY_TERMS = 500
+MAX_TERM_LENGTH = 100
+MAX_MEMO_LENGTH = 2000
+
+
+def term_key(term: str) -> str:
+    """The identity of a term: case and runs of spaces do not matter."""
+    return term.lower()
+
+
+class VocabularyTermOut(BaseModel):
+    term: str
+    memo: str
+    studied: bool
+    source_question_id: str | None
+    """The question the term was first selected in."""
+    created_at: datetime
+    updated_at: datetime
+
+
+class _TermRequest(BaseModel):
+    term: str
+
+    @field_validator("term")
+    @classmethod
+    def _normalize(cls, value: str) -> str:
+        value = " ".join(value.split())
+        if not 1 <= len(value) <= MAX_TERM_LENGTH:
+            raise ValueError(f"term must be 1-{MAX_TERM_LENGTH} characters")
+        return value
+
+
+class AddVocabularyRequest(_TermRequest):
+    source_question_id: str | None = Field(default=None, max_length=50)
+
+
+class UpdateVocabularyRequest(_TermRequest):
+    memo: str | None = Field(default=None, max_length=MAX_MEMO_LENGTH)
+    studied: bool | None = None
 
 
 class StatsOut(BaseModel):
@@ -73,6 +114,8 @@ class LearnerState(BaseModel):
     """O/X answer counts per statement, keyed "question_id#statement_index" (the key the O/X page uses)."""
     ox_marks: dict[str, MarkOut]
     """Markers on single O/X statements, same key as `ox_stats`; separate from the question's `marks`."""
+    vocabulary: dict[str, VocabularyTermOut]
+    """Saved words keyed by their lower-cased term."""
 
 
 class MarkRemovedResponse(BaseModel):

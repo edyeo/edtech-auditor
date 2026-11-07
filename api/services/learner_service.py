@@ -9,6 +9,7 @@ from api.models.learner import (
     MAX_MARK_COUNT,
     LearnerState,
     LocalImportRequest,
+    MAX_VOCABULARY_TERMS,
     MarkOut,
     MarkRemovedResponse,
     MiniTestItem,
@@ -17,11 +18,13 @@ from api.models.learner import (
     MiniTestSubmitResponse,
     ReviewState,
     StatsOut,
+    VocabularyTermOut,
+    term_key,
 )
 from api.repositories.learner_repository import LearnerRepository
 from api.repositories.ox_question_repository import OxQuestionRepository
 from api.repositories.question_repository import QuestionRepository
-from api.errors import InvalidAnswerError, QuestionNotFoundError
+from api.errors import InvalidAnswerError, QuestionNotFoundError, VocabularyFullError, VocabularyTermNotFoundError
 from api.services.question_service import QuestionService
 
 # Wrong answers in a row from which the UI flags a question. Marking does not wait for it: every
@@ -54,6 +57,7 @@ class LearnerService:
             review=await self._repo.get_review(learner_id),
             ox_stats=await self._repo.get_ox_stats(learner_id),
             ox_marks=await self._repo.get_ox_marks(learner_id),
+            vocabulary=await self._repo.get_vocabulary(learner_id),
         )
 
     async def list_mini_tests(self, learner_id: UUID) -> list[MiniTestRecord]:
@@ -85,6 +89,35 @@ class LearnerService:
         self._require_statement(question_id, statement_index)
         async with self._session.begin():
             await self._repo.remove_ox_mark(learner_id, question_id, statement_index)
+
+    # ---- vocabulary --------------------------------------------------------------------------
+
+    async def add_term(
+        self, learner_id: UUID, term: str, source_question_id: str | None
+    ) -> VocabularyTermOut:
+        """Save a word; saving one that is already there changes nothing."""
+        if source_question_id is not None and self._bank.get_by_id(source_question_id) is None:
+            source_question_id = None  # a stale or unknown source must not block saving the word
+        async with self._session.begin():
+            # Without the lock, concurrent saves could each see room for one more word.
+            await self._repo.lock_learner(learner_id)
+            existing = await self._repo.get_vocabulary(learner_id)
+            if term_key(term) not in existing and len(existing) >= MAX_VOCABULARY_TERMS:
+                raise VocabularyFullError()
+            return await self._repo.add_term(learner_id, term, source_question_id)
+
+    async def update_term(
+        self, learner_id: UUID, term: str, memo: str | None, studied: bool | None
+    ) -> VocabularyTermOut:
+        async with self._session.begin():
+            updated = await self._repo.update_term(learner_id, term, memo, studied)
+        if updated is None:
+            raise VocabularyTermNotFoundError()
+        return updated
+
+    async def remove_term(self, learner_id: UUID, term: str) -> None:
+        async with self._session.begin():
+            await self._repo.remove_term(learner_id, term)
 
     # ---- attempts ----------------------------------------------------------------------------
 

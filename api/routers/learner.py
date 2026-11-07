@@ -1,11 +1,12 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Path
+from fastapi import APIRouter, Depends, Path, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.db.session import get_session
 from api.models.learner import (
+    AddVocabularyRequest,
     AttemptRequest,
     AttemptResponse,
     LearnerState,
@@ -18,6 +19,8 @@ from api.models.learner import (
     MiniTestSubmitResponse,
     ReviewState,
     SetMarkRequest,
+    UpdateVocabularyRequest,
+    VocabularyTermOut,
 )
 from api.routers.deps import get_learner_id
 from api.services.learner_service import LearnerService
@@ -73,6 +76,29 @@ async def remove_ox_mark(
     question_id: str, statement_index: Annotated[int, Path(ge=0)], learner_id: LearnerId, service: Service
 ) -> None:
     await service.remove_ox_mark(learner_id, question_id, statement_index)
+
+
+@router.post("/vocabulary", response_model=VocabularyTermOut)
+async def add_vocabulary_term(
+    payload: AddVocabularyRequest, learner_id: LearnerId, service: Service
+) -> VocabularyTermOut:
+    """Save a word selected in a question; saving one that already exists returns it unchanged."""
+    return await service.add_term(learner_id, payload.term, payload.source_question_id)
+
+
+@router.patch("/vocabulary", response_model=VocabularyTermOut)
+async def update_vocabulary_term(
+    payload: UpdateVocabularyRequest, learner_id: LearnerId, service: Service
+) -> VocabularyTermOut:
+    """Change the memo and/or the studied flag of a saved word."""
+    return await service.update_term(learner_id, payload.term, payload.memo, payload.studied)
+
+
+@router.delete("/vocabulary", status_code=204)
+async def remove_vocabulary_term(
+    term: Annotated[str, Query(min_length=1, max_length=200)], learner_id: LearnerId, service: Service
+) -> None:
+    await service.remove_term(learner_id, " ".join(term.split()))
 
 
 @router.post("/attempts", response_model=AttemptResponse)

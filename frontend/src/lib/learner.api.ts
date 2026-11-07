@@ -131,6 +131,7 @@ export async function fetchLearnerState(): Promise<{
   maxMarkCount: number
   marks: QuestionMarkMap
   oxMarks: QuestionMarkMap
+  choiceMarks: QuestionMarkMap
   vocabulary: VocabularyMap
   stats: QuestionStatsMap
   oxStats: OxStatsMap
@@ -141,6 +142,7 @@ export async function fetchLearnerState(): Promise<{
     max_mark_count: number
     marks: Record<string, WireMark>
     ox_marks: Record<string, WireMark>
+    choice_marks: Record<string, WireMark>
     vocabulary: Record<string, WireTerm>
     stats: Record<string, WireStats>
     ox_stats: Record<string, WireOxStats>
@@ -151,6 +153,7 @@ export async function fetchLearnerState(): Promise<{
     maxMarkCount: raw.max_mark_count,
     marks: mapValues(raw.marks, toMark),
     oxMarks: mapValues(raw.ox_marks, toMark),
+    choiceMarks: mapValues(raw.choice_marks, toMark),
     vocabulary: mapValues(raw.vocabulary, toTerm),
     stats: mapValues(raw.stats, toStats),
     oxStats: mapValues(raw.ox_stats, toOxStats),
@@ -185,6 +188,23 @@ export async function putOxMark(statementKey: string, count: number): Promise<Qu
   return toMark(
     await learnerRequest<WireMark>(oxMarkPath(statementKey), { method: 'PUT', body: JSON.stringify({ count }) }),
   )
+}
+
+/** "question_id#choice_index" -> the path of that choice's marker endpoint. */
+function choiceMarkPath(choiceKey: string): string {
+  const [questionId, choiceIndex] = choiceKey.split('#')
+  return `/choice-marks/${questionId}/${choiceIndex}`
+}
+
+/** Set how many markers one answer choice carries (1 and up); removing them all is `deleteChoiceMark`. */
+export async function putChoiceMark(choiceKey: string, count: number): Promise<QuestionMark> {
+  return toMark(
+    await learnerRequest<WireMark>(choiceMarkPath(choiceKey), { method: 'PUT', body: JSON.stringify({ count }) }),
+  )
+}
+
+export function deleteChoiceMark(choiceKey: string): Promise<void> {
+  return learnerRequest(choiceMarkPath(choiceKey), { method: 'DELETE' })
 }
 
 export function deleteOxMark(statementKey: string): Promise<void> {

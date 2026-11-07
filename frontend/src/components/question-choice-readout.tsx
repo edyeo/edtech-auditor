@@ -1,3 +1,4 @@
+import { ChoiceMarkerBox } from '@/components/choice-marker-box'
 import { HighlightedText } from '@/components/highlighted-text'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
@@ -7,10 +8,17 @@ type QuestionChoiceReadoutProps = {
   /** Choice to emphasise among the others; omit for a plain list. */
   highlightIndex?: number | null
   highlightLabel?: string
+  /** When given, every choice carries its own marker box. */
+  questionId?: string
 }
 
 /** Every choice of a question as a read-only numbered list. */
-export function QuestionChoiceReadout({ choices, highlightIndex = null, highlightLabel }: QuestionChoiceReadoutProps) {
+export function QuestionChoiceReadout({
+  choices,
+  highlightIndex = null,
+  highlightLabel,
+  questionId,
+}: QuestionChoiceReadoutProps) {
   return (
     <ol className="flex flex-col gap-1.5">
       {choices.map((choice, index) => (
@@ -26,6 +34,7 @@ export function QuestionChoiceReadout({ choices, highlightIndex = null, highligh
             {choice ? <HighlightedText text={choice} /> : '그림 참고'}
           </span>
           {index === highlightIndex && highlightLabel && <Badge variant="secondary">{highlightLabel}</Badge>}
+          {questionId && <ChoiceMarkerBox questionId={questionId} choiceIndex={index} />}
         </li>
       ))}
     </ol>

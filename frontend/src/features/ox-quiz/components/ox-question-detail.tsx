@@ -30,7 +30,12 @@ export function OxQuestionDetail({ id, question, choiceIndex }: OxQuestionDetail
         <QuestionMarkerBox questionId={question.id} />
       </div>
       <QuestionStem stem={question.stem} imageUrl={question.image_url} />
-      <QuestionChoiceReadout choices={question.choices} highlightIndex={choiceIndex} highlightLabel="이 보기" />
+      <QuestionChoiceReadout
+        choices={question.choices}
+        highlightIndex={choiceIndex}
+        highlightLabel="이 보기"
+        questionId={question.id}
+      />
       <Button
         type="button"
         variant="outline"

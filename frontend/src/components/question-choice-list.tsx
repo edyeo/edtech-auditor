@@ -1,4 +1,5 @@
 import { cn } from 'cn'
+import { ChoiceMarkerBox } from '@/components/choice-marker-box'
 import { HighlightedText } from '@/components/highlighted-text'
 
 type QuestionChoiceListProps = {
@@ -7,6 +8,8 @@ type QuestionChoiceListProps = {
   correctIndex: number | null
   correctIndexes: number[]
   onSelect: (index: number) => void
+  /** When given, every choice carries its own marker box beside it. */
+  questionId?: string
 }
 
 export function QuestionChoiceList({
@@ -15,6 +18,7 @@ export function QuestionChoiceList({
   correctIndex,
   correctIndexes,
   onSelect,
+  questionId,
 }: QuestionChoiceListProps) {
   const isChecked = correctIndex !== null
 
@@ -25,7 +29,7 @@ export function QuestionChoiceList({
         const isCorrectChoice = correctIndexes.includes(index)
 
         return (
-          <li key={index}>
+          <li key={index} className="flex items-start gap-1">
             <button
               type="button"
               disabled={isChecked}
@@ -34,7 +38,7 @@ export function QuestionChoiceList({
                 if (!window.getSelection()?.toString()) onSelect(index)
               }}
               className={cn(
-                'flex w-full items-start gap-3 rounded-lg border px-4 py-3 text-left text-base transition-colors md:text-sm',
+                'flex min-w-0 flex-1 items-start gap-3 rounded-lg border px-4 py-3 text-left text-base transition-colors md:text-sm',
                 'disabled:cursor-default',
                 !isChecked && 'hover:bg-accent/50',
                 !isChecked && isSelected && 'border-primary bg-accent',
@@ -47,6 +51,11 @@ export function QuestionChoiceList({
               <span className="font-medium text-muted-foreground">{index + 1}.</span>
               <span data-term-source>{choice ? <HighlightedText text={choice} /> : '그림 참고'}</span>
             </button>
+            {questionId && (
+              <div className="shrink-0 pt-1">
+                <ChoiceMarkerBox questionId={questionId} choiceIndex={index} />
+              </div>
+            )}
           </li>
         )
       })}

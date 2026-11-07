@@ -22,6 +22,8 @@ export type LearnerState = {
   marks: QuestionMarkMap
   /** Markers on single O/X statements, keyed "question_id#statement_index"; separate from `marks`. */
   oxMarks: QuestionMarkMap
+  /** Markers on single answer choices, keyed "question_id#choice_index"; separate from `marks` and `oxMarks`. */
+  choiceMarks: QuestionMarkMap
   /** Words saved from the questions, highlighted wherever they appear. */
   vocabulary: VocabularyMap
   stats: QuestionStatsMap
@@ -38,6 +40,7 @@ export const INITIAL_LEARNER_STATE: LearnerState = {
   maxMarkCount: 5,
   marks: {},
   oxMarks: {},
+  choiceMarks: {},
   vocabulary: {},
   stats: {},
   oxStats: {},

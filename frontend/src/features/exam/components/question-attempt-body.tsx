@@ -35,6 +35,7 @@ export function QuestionAttemptBody({ question, attempt }: QuestionAttemptBodyPr
         correctIndex={correctIndex}
         correctIndexes={correctIndexes}
         onSelect={selectChoice}
+        questionId={question.id}
       />
 
       {isChecked && (

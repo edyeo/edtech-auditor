@@ -43,7 +43,7 @@ export function QuestionListRow({ question, stats, mark, expanded = false }: Que
       {expanded && (
         <div className="mt-1 flex flex-col gap-3 pl-1 pb-2 md:pl-8">
           <QuestionStem stem={question.stem} imageUrl={question.image_url} />
-          <QuestionChoiceReadout choices={question.choices} />
+          <QuestionChoiceReadout choices={question.choices} questionId={question.id} />
         </div>
       )}
     </li>

@@ -1,6 +1,7 @@
 import { importLocalLearnerDataOnce } from '@/lib/import-local-learner-data'
 import {
   LearnerApiError,
+  deleteChoiceMark,
   deleteMark,
   deleteOxMark,
   deleteVocabularyImage,
@@ -12,6 +13,7 @@ import {
   postMiniTest,
   postVocabularyImage,
   postVocabularyTerm,
+  putChoiceMark,
   putMark,
   putOxMark,
   putReview,
@@ -97,6 +99,18 @@ const OX_STATEMENT_MARKS: MarkChannel = {
   write: (state, oxMarks) => ({ ...state, oxMarks }),
   save: putOxMark,
   remove: deleteOxMark,
+}
+
+const CHOICE_MARKS: MarkChannel = {
+  read: (state) => state.choiceMarks,
+  write: (state, choiceMarks) => ({ ...state, choiceMarks }),
+  save: putChoiceMark,
+  remove: deleteChoiceMark,
+}
+
+/** Marker box +/- buttons of one answer choice, keyed "question_id#choice_index". */
+export function setChoiceMarkCount(choiceKey: string, count: number): void {
+  setMarkCount(CHOICE_MARKS, choiceKey, count)
 }
 
 /** Marker box +/- buttons of a question. Optimistic: the UI changes at once and rolls back if the server refuses. */

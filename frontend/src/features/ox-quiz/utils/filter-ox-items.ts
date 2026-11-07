@@ -1,4 +1,5 @@
 import type { OxFilter, OxItem } from '@/features/ox-quiz/types/ox-quiz.types'
+import { getQuestionSection } from '@/lib/question-section'
 import type { OxStatsMap, QuestionStatsMap } from '@/types/learner.types'
 
 export const DEFAULT_OX_FILTER: OxFilter = {
@@ -28,7 +29,7 @@ export function filterOxItems(
   return items.filter((item) => {
     const questionId = item.question.id
     if (filter.year !== 'all' && item.question.year !== filter.year) return false
-    if (filter.subject !== 'all' && item.question.subject !== filter.subject) return false
+    if (filter.subject !== 'all' && getQuestionSection(item.question) !== filter.subject) return false
     if (filter.markedOnly && !markedKeys.has(item.key)) return false
     if (filter.wrongOnly && !(stats[questionId]?.wrong > 0)) return false
     if (filter.solved !== 'all') {

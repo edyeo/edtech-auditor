@@ -9,6 +9,7 @@ import { toOxStats } from '@/lib/learner.api'
 import { useOxStats } from '@/lib/use-ox-stats'
 import { useQuestionBank } from '@/lib/use-question-bank'
 import { useOxStatementMarks } from '@/lib/use-ox-statement-marks'
+import { listQuestionSections } from '@/lib/question-section'
 import { useQuestionStats } from '@/lib/use-question-stats'
 
 const PAGE_SIZE = 20
@@ -65,7 +66,8 @@ export function useOxQuiz() {
   )
 
   const years = useMemo(() => [...new Set(items.map((item) => item.question.year))].sort((a, b) => b - a), [items])
-  const subjects = useMemo(() => [...new Set(items.map((item) => item.question.subject))], [items])
+  // Sections, not raw subjects: 감리 and 사업관리 are separate choices.
+  const subjects = useMemo(() => listQuestionSections(items.map((item) => item.question)), [items])
 
   function updateFilter(patch: Partial<OxFilter>) {
     setFilter((current) => ({ ...current, ...patch }))

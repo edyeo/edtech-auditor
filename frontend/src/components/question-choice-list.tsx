@@ -23,7 +23,7 @@ export function QuestionChoiceList({
   const isChecked = correctIndex !== null
 
   return (
-    <ul className="flex flex-col gap-2">
+    <ul role="radiogroup" className="flex flex-col gap-2">
       {choices.map((choice, index) => {
         const isSelected = selectedIndex === index
         const isCorrectChoice = correctIndexes.includes(index)
@@ -33,7 +33,8 @@ export function QuestionChoiceList({
             <button
               type="button"
               disabled={isChecked}
-              aria-pressed={isSelected}
+              role="radio"
+              aria-checked={isSelected}
               // Dragging over the text to select a word also ends in a click; that must not pick the choice.
               onClick={() => {
                 if (!window.getSelection()?.toString()) onSelect(index)
@@ -42,14 +43,22 @@ export function QuestionChoiceList({
                 'flex min-w-0 flex-1 items-start gap-3 rounded-lg border px-4 py-3 text-left text-base transition-colors md:text-sm',
                 'disabled:cursor-default',
                 !isChecked && 'hover:bg-accent/50',
-                // The picked choice is red before grading too (the same red as a wrong pick afterwards).
-                !isChecked && isSelected && 'border-red-500 bg-red-500/10',
-                !isChecked && !isSelected && 'border-border',
+                // Before grading the row keeps its plain look; the radio in front shows the pick.
+                !isChecked && 'border-border',
                 isChecked && isCorrectChoice && 'border-emerald-500 bg-emerald-500/10',
                 isChecked && isSelected && !isCorrectChoice && 'border-red-500 bg-red-500/10',
                 isChecked && !isSelected && !isCorrectChoice && 'border-border opacity-60',
               )}
             >
+              <span
+                aria-hidden
+                className={cn(
+                  'mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border-2',
+                  isSelected ? 'border-sky-700' : 'border-muted-foreground/50',
+                )}
+              >
+                {isSelected && <span className="size-2 rounded-full bg-sky-700" />}
+              </span>
               <span className="font-medium text-muted-foreground">{index + 1}.</span>
               <span data-term-source>{choice ? <HighlightedText text={choice} /> : '그림 참고'}</span>
             </button>

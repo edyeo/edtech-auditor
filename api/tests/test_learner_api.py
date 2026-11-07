@@ -1,10 +1,20 @@
 import asyncio
 import uuid
 
+from api.repositories.ox_question_repository import OxQuestionRepository
 from api.tests.conftest import access_token
 
 # 2021-22-01: choices 21.9 / 23.3 / 23.8 / 26.4 -> correct is index 1.
 Q1, Q2, Q94 = "2021-22-01", "2021-22-02", "2021-22-94"  # Q94 is multiple-answer (indexes 1 and 2)
+
+
+OX_QUESTION = OxQuestionRepository().list_ids()[0]
+
+
+async def put_ox_mark(client, learner, question_id, statement_index, count):
+    return await client.put(
+        f"/api/learner/ox-marks/{question_id}/{statement_index}", headers=learner, json={"count": count}
+    )
 
 
 async def attempt(client, learner, question_id, selected):
@@ -187,3 +197,36 @@ async def test_admin_override_changes_grading_and_can_be_reverted(client, admin)
     reverted = await client.delete(f"/api/admin/questions/{Q1}/answer", headers=admin)
     assert reverted.json()["answer_overridden"] is False
     assert (await client.post("/api/questions/check", json={"question_id": Q1, "selected_index": 1})).json()["is_correct"] is True
+
+
+async def test_statement_markers_are_separate_from_the_question_markers(client, learner):
+    key = f"{OX_QUESTION}#1"
+    assert (await put_ox_mark(client, learner, OX_QUESTION, 1, 3)).json()["count"] == 3
+    assert (await put_ox_mark(client, learner, OX_QUESTION, 1, 2)).json()["count"] == 2  # set, not added
+    await client.put(f"/api/learner/marks/{OX_QUESTION}", headers=learner, json={"count": 5})
+
+    state = (await client.get("/api/learner/state", headers=learner)).json()
+    assert state["ox_marks"][key]["count"] == 2 and list(state["ox_marks"]) == [key]
+    assert state["marks"][OX_QUESTION]["count"] == 5  # the question keeps its own markers
+
+    assert (await client.delete(f"/api/learner/ox-marks/{OX_QUESTION}/1", headers=learner)).status_code == 204
+    state = (await client.get("/api/learner/state", headers=learner)).json()
+    assert state["ox_marks"] == {} and state["marks"][OX_QUESTION]["count"] == 5
+
+
+async def test_statement_markers_belong_to_one_account(client):
+    alice = {"Authorization": f"Bearer {access_token()}"}
+    bob = {"Authorization": f"Bearer {access_token()}"}
+    await put_ox_mark(client, alice, OX_QUESTION, 0, 1)
+    assert (await client.get("/api/learner/state", headers=bob)).json()["ox_marks"] == {}
+
+
+async def test_statement_marker_input_is_validated(client, learner):
+    for bad in (0, 6, -1):
+        assert (await put_ox_mark(client, learner, OX_QUESTION, 0, bad)).status_code == 422
+    assert (await put_ox_mark(client, learner, OX_QUESTION, 99, 1)).status_code == 422  # no such statement
+    assert (await put_ox_mark(client, learner, OX_QUESTION, -1, 1)).status_code == 422
+    assert (await put_ox_mark(client, learner, "nope", 0, 1)).status_code == 404
+    assert (await put_ox_mark(client, learner, Q1, 0, 1)).status_code == 404  # not an O/X question
+    assert (await client.put(f"/api/learner/ox-marks/{OX_QUESTION}/0", headers=learner)).status_code == 422
+    assert (await client.put(f"/api/learner/ox-marks/{OX_QUESTION}/0", json={"count": 1})).status_code == 401

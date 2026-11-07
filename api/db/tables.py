@@ -57,6 +57,16 @@ ox_statement_stats = Table(
     Column("last_attempt_at", DateTime(timezone=True), nullable=False),
 )
 
+ox_statement_marks = Table(
+    "ox_statement_marks",
+    metadata,
+    Column("learner_id", UUID(as_uuid=True), primary_key=True),
+    Column("question_id", Text, primary_key=True),
+    Column("statement_index", SmallInteger, primary_key=True),
+    Column("mark_count", SmallInteger, nullable=False),
+    Column("marked_at", DateTime(timezone=True), nullable=False),
+)
+
 review_states = Table(
     "review_states",
     metadata,

@@ -1,7 +1,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Path
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.db.session import get_session
@@ -54,6 +54,25 @@ async def set_mark(
 @router.delete("/marks/{question_id}", response_model=MarkRemovedResponse)
 async def remove_mark(question_id: str, learner_id: LearnerId, service: Service) -> MarkRemovedResponse:
     return await service.remove_mark(learner_id, question_id)
+
+
+@router.put("/ox-marks/{question_id}/{statement_index}", response_model=MarkOut)
+async def set_ox_mark(
+    question_id: str,
+    statement_index: Annotated[int, Path(ge=0)],
+    payload: SetMarkRequest,
+    learner_id: LearnerId,
+    service: Service,
+) -> MarkOut:
+    """Set how many markers one O/X statement carries (1-5); DELETE removes them all."""
+    return await service.set_ox_mark_count(learner_id, question_id, statement_index, payload.count)
+
+
+@router.delete("/ox-marks/{question_id}/{statement_index}", status_code=204)
+async def remove_ox_mark(
+    question_id: str, statement_index: Annotated[int, Path(ge=0)], learner_id: LearnerId, service: Service
+) -> None:
+    await service.remove_ox_mark(learner_id, question_id, statement_index)
 
 
 @router.post("/attempts", response_model=AttemptResponse)

@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.db.tables import (
     mini_test_items,
     mini_test_records,
+    ox_statement_marks,
     ox_statement_stats,
     question_marks,
     question_stats,
@@ -70,6 +71,20 @@ class LearnerRepository:
             for r in rows
         }
 
+    async def get_ox_marks(self, learner_id: UUID) -> dict[str, MarkOut]:
+        rows = await self._session.execute(
+            select(
+                ox_statement_marks.c.question_id,
+                ox_statement_marks.c.statement_index,
+                ox_statement_marks.c.marked_at,
+                ox_statement_marks.c.mark_count,
+            ).where(ox_statement_marks.c.learner_id == learner_id)
+        )
+        return {
+            f"{r.question_id}#{r.statement_index}": MarkOut(marked_at=r.marked_at, source="manual", count=r.mark_count)
+            for r in rows
+        }
+
     async def get_review(self, learner_id: UUID) -> dict[str, ReviewState]:
         rows = await self._session.execute(select(review_states).where(review_states.c.learner_id == learner_id))
         return {
@@ -124,7 +139,9 @@ class LearnerRepository:
         )
 
     async def has_any_data(self, learner_id: UUID) -> bool:
-        for table in (question_marks, question_stats, review_states, mini_test_records, ox_statement_stats):
+        for table in (
+            question_marks, question_stats, review_states, mini_test_records, ox_statement_stats, ox_statement_marks
+        ):
             count = await self._session.scalar(
                 select(func.count()).select_from(table).where(table.c.learner_id == learner_id)
             )
@@ -186,6 +203,37 @@ class LearnerRepository:
         await self._session.execute(
             delete(question_marks).where(
                 question_marks.c.learner_id == learner_id, question_marks.c.question_id == question_id
+            )
+        )
+
+    async def set_ox_mark_count(
+        self, learner_id: UUID, question_id: str, statement_index: int, count: int
+    ) -> MarkOut:
+        """Set the marker count of one O/X statement; an existing mark keeps its original date."""
+        stmt = insert(ox_statement_marks).values(
+            learner_id=learner_id,
+            question_id=question_id,
+            statement_index=statement_index,
+            mark_count=count,
+            marked_at=datetime.now(UTC),
+        )
+        stmt = stmt.on_conflict_do_update(
+            index_elements=[
+                ox_statement_marks.c.learner_id,
+                ox_statement_marks.c.question_id,
+                ox_statement_marks.c.statement_index,
+            ],
+            set_={"mark_count": count},
+        ).returning(ox_statement_marks.c.marked_at, ox_statement_marks.c.mark_count)
+        row = (await self._session.execute(stmt)).one()
+        return MarkOut(marked_at=row.marked_at, source="manual", count=row.mark_count)
+
+    async def remove_ox_mark(self, learner_id: UUID, question_id: str, statement_index: int) -> None:
+        await self._session.execute(
+            delete(ox_statement_marks).where(
+                ox_statement_marks.c.learner_id == learner_id,
+                ox_statement_marks.c.question_id == question_id,
+                ox_statement_marks.c.statement_index == statement_index,
             )
         )
 

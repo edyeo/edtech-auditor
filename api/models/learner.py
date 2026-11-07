@@ -71,6 +71,8 @@ class LearnerState(BaseModel):
     review: dict[str, ReviewState]
     ox_stats: dict[str, OxStatsOut]
     """O/X answer counts per statement, keyed "question_id#statement_index" (the key the O/X page uses)."""
+    ox_marks: dict[str, MarkOut]
+    """Markers on single O/X statements, same key as `ox_stats`; separate from the question's `marks`."""
 
 
 class MarkRemovedResponse(BaseModel):

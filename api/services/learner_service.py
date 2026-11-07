@@ -19,8 +19,9 @@ from api.models.learner import (
     StatsOut,
 )
 from api.repositories.learner_repository import LearnerRepository
+from api.repositories.ox_question_repository import OxQuestionRepository
 from api.repositories.question_repository import QuestionRepository
-from api.errors import QuestionNotFoundError
+from api.errors import InvalidAnswerError, QuestionNotFoundError
 from api.services.question_service import QuestionService
 
 # Wrong answers in a row from which the UI flags a question. Marking does not wait for it: every
@@ -40,6 +41,7 @@ class LearnerService:
         self._questions = questions or QuestionService()
         self._repo = LearnerRepository(session)
         self._bank = QuestionRepository()
+        self._ox = OxQuestionRepository()
 
     # ---- reads -------------------------------------------------------------------------------
 
@@ -51,6 +53,7 @@ class LearnerService:
             stats=await self._repo.get_stats(learner_id),
             review=await self._repo.get_review(learner_id),
             ox_stats=await self._repo.get_ox_stats(learner_id),
+            ox_marks=await self._repo.get_ox_marks(learner_id),
         )
 
     async def list_mini_tests(self, learner_id: UUID) -> list[MiniTestRecord]:
@@ -70,6 +73,18 @@ class LearnerService:
             await self._repo.remove_mark(learner_id, question_id)
             stats = await self._repo.reset_streak(learner_id, question_id)
         return MarkRemovedResponse(stats=stats)
+
+    async def set_ox_mark_count(
+        self, learner_id: UUID, question_id: str, statement_index: int, count: int
+    ) -> MarkOut:
+        self._require_statement(question_id, statement_index)
+        async with self._session.begin():
+            return await self._repo.set_ox_mark_count(learner_id, question_id, statement_index, count)
+
+    async def remove_ox_mark(self, learner_id: UUID, question_id: str, statement_index: int) -> None:
+        self._require_statement(question_id, statement_index)
+        async with self._session.begin():
+            await self._repo.remove_ox_mark(learner_id, question_id, statement_index)
 
     # ---- attempts ----------------------------------------------------------------------------
 
@@ -171,6 +186,16 @@ class LearnerService:
                     )
             await self._repo.trim_mini_tests(learner_id)
         return True
+
+    def _require_statement(self, question_id: str, statement_index: int) -> None:
+        """The statement must exist in the O/X set (a bare polarity plays every choice of the question)."""
+        entry = self._ox.entry(question_id)
+        question = self._bank.get_by_id(question_id)
+        if entry is None or question is None:
+            raise QuestionNotFoundError(question_id)
+        statement_count = len(question.choices) if isinstance(entry, str) else len(entry)
+        if statement_index >= statement_count:
+            raise InvalidAnswerError()
 
     def _require_question(self, question_id: str) -> None:
         if self._bank.get_by_id(question_id) is None:

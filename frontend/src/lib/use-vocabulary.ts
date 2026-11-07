@@ -10,5 +10,9 @@ export function useVocabulary() {
     [vocabulary],
   )
 
-  return { terms, has: (term: string) => termKey(term) in vocabulary }
+  return {
+    terms,
+    has: (term: string) => termKey(term) in vocabulary,
+    find: (term: string) => vocabulary[termKey(term)],
+  }
 }

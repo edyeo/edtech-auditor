@@ -14,7 +14,13 @@ export function HighlightedText({ text }: HighlightedTextProps) {
     <>
       {text.split(pattern).map((part, index) =>
         index % 2 === 1 ? (
-          <mark key={index} className="rounded-sm bg-yellow-200 px-0.5 text-inherit">
+          <mark
+            key={index}
+            title="눌러서 단어장에서 해제"
+            // Selecting the word brings up the save / un-save buttons for it.
+            onClick={(event) => window.getSelection()?.selectAllChildren(event.currentTarget)}
+            className="cursor-pointer rounded-sm bg-yellow-200 px-0.5 text-inherit"
+          >
             {part}
           </mark>
         ) : (

@@ -13,10 +13,8 @@ EXPLANATIONS_PATH = Path(__file__).resolve().parent.parent / "data" / "ox_explan
 _ox = OxQuestionRepository()
 _bank = QuestionRepository()
 
-AUDIT_SUBJECT = "감리 및 사업관리"
-# Numbers 1-25 of each round start with project management (사업관리) questions; the audit part follows,
-# except in 2024 and 2025 where it comes first.
-AUDIT_NUMBERS = {2021: (11, 25), 2022: (11, 25), 2023: (13, 25), 2024: (1, 17), 2025: (1, 19)}
+# The O/X set covers the audit and project-management part (one subject in the data) and security.
+O_X_SUBJECTS = {"감리 및 사업관리", "보안"}
 
 
 def _derived_ids(polarity: str) -> list[str]:
@@ -45,15 +43,19 @@ async def verdict(client, question_id: str, statement_index: int, answer: str = 
     return response.json()
 
 
-def test_only_audit_questions_are_included():
+def test_only_audit_project_management_and_security_questions_are_included():
     ids = _ox.list_ids()
     assert ids
     for question_id in ids:
         question = _bank.get_by_id(question_id)
         assert question is not None, question_id
-        low, high = AUDIT_NUMBERS[question.year]
-        assert question.subject == AUDIT_SUBJECT, question_id
-        assert low <= question.number <= high, f"{question_id} is not an audit question"
+        assert question.subject in O_X_SUBJECTS, f"{question_id} is not in a subject the O/X set covers"
+    assert {_bank.get_by_id(question_id).subject for question_id in ids} == O_X_SUBJECTS
+
+
+def test_statements_are_listed_in_the_exams_question_order():
+    keys = [(_bank.get_by_id(question_id).year, _bank.get_by_id(question_id).number) for question_id in _ox.list_ids()]
+    assert keys == sorted(keys)
 
 
 def test_derived_questions_have_four_statement_choices():
@@ -133,10 +135,11 @@ async def test_question_outside_the_ox_set_is_not_found(client):
     assert response.status_code == 404
 
 
-async def test_project_management_question_is_not_in_the_set(client):
-    # 2021 number 1 is a PERT question from the project-management part.
-    assert _ox.entry("2021-22-01") is None
-    response = await client.post("/api/ox/check", json={"question_id": "2021-22-01", "statement_index": 0, "answer": "O"})
+async def test_software_engineering_question_is_not_in_the_set(client):
+    # 2021 number 26 is the first software engineering question.
+    assert _bank.get_by_id("2021-22-26").subject == "소프트웨어 공학"
+    assert _ox.entry("2021-22-26") is None
+    response = await client.post("/api/ox/check", json={"question_id": "2021-22-26", "statement_index": 0, "answer": "O"})
     assert response.status_code == 404
 
 
@@ -210,7 +213,7 @@ async def test_explanation_of_an_authored_statement(client):
 
 
 async def test_explanation_for_unknown_question_or_index(client):
-    assert (await client.get("/api/ox/explanations/2021-22-01/0")).status_code == 404  # project management
+    assert (await client.get("/api/ox/explanations/2021-22-26/0")).status_code == 404  # software engineering
     question_id = _derived_ids("positive")[0]
     assert (await client.get(f"/api/ox/explanations/{question_id}/4")).status_code == 422
     assert (await client.get(f"/api/ox/explanations/{question_id}/-1")).status_code == 422

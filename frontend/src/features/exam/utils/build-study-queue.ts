@@ -12,20 +12,34 @@ export type StudyFilter = {
   section: string | 'all'
   query: string
   attempted: StudyAttempted
+  /** Only questions that carry at least one marker. */
+  markedOnly: boolean
+  /** Only questions that were answered wrongly at least once. */
+  wrongOnly: boolean
 }
 
-export const DEFAULT_STUDY_FILTER: StudyFilter = { year: 'all', section: 'all', query: '', attempted: 'all' }
+export const DEFAULT_STUDY_FILTER: StudyFilter = {
+  year: 'all',
+  section: 'all',
+  query: '',
+  attempted: 'all',
+  markedOnly: false,
+  wrongOnly: false,
+}
 
 export function filterStudyQuestions(
   questions: QuestionPublic[],
   filter: StudyFilter,
   stats: QuestionStatsMap,
+  markedIds: ReadonlySet<string>,
 ): QuestionPublic[] {
   const query = filter.query.trim().toLowerCase()
 
   return questions.filter((question) => {
     if (filter.year !== 'all' && question.year !== filter.year) return false
     if (filter.section !== 'all' && getQuestionSection(question) !== filter.section) return false
+    if (filter.markedOnly && !markedIds.has(question.id)) return false
+    if (filter.wrongOnly && !(stats[question.id]?.wrong > 0)) return false
     if (filter.attempted !== 'all') {
       const attempted = (stats[question.id]?.attempts ?? 0) > 0
       if (attempted !== (filter.attempted === 'attempted')) return false

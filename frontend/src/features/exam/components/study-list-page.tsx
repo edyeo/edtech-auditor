@@ -17,6 +17,7 @@ import type { SessionMode } from '@/features/exam/utils/use-exam-session'
 import { paginateItems } from '@/lib/paginate-items'
 import { listQuestionSections } from '@/lib/question-section'
 import { useQuestionBank } from '@/lib/use-question-bank'
+import { useQuestionMarks } from '@/lib/use-question-marks'
 import { useQuestionStats } from '@/lib/use-question-stats'
 import { useReviewState } from '@/lib/use-review-state'
 import type { QuestionStatsMap, ReviewStateMap } from '@/types/learner.types'
@@ -29,6 +30,7 @@ export function StudyListPage() {
   const { questions, isLoading, error } = useQuestionBank()
   const reviewState = useReviewState()
   const stats = useQuestionStats()
+  const { markedIds } = useQuestionMarks()
   const [mode, setMode] = useState<SessionMode>('due')
   const [filter, setFilter] = useState<StudyFilter>(DEFAULT_STUDY_FILTER)
   // The order is frozen to this snapshot: grading a question changes the live review state, and the
@@ -37,17 +39,21 @@ export function StudyListPage() {
   const [queueReviewState, setQueueReviewState] = useState<ReviewStateMap>(reviewState)
   // Same for the solved/unsolved filter: a question graded just now must not drop out of an "unsolved" list.
   const [queueStats, setQueueStats] = useState<QuestionStatsMap>(stats)
+  // And for the marked filter: marking or un-marking a card must not make it vanish under the learner.
+  const [queueMarkedIds, setQueueMarkedIds] = useState<ReadonlySet<string>>(() => new Set(markedIds))
   const [requestedPage, setRequestedPage] = useState(1)
 
   const years = useMemo(() => [...new Set(questions.map((q) => q.year))].sort((a, b) => b - a), [questions])
   const sections = useMemo(() => listQuestionSections(questions), [questions])
   const inScope = useMemo(
-    () => filterStudyQuestions(questions, filter, queueStats),
-    [questions, filter, queueStats],
+    () => filterStudyQuestions(questions, filter, queueStats, queueMarkedIds),
+    [questions, filter, queueStats, queueMarkedIds],
   )
+  // A marker or wrong-answer filter lists everything it matches, whether or not the review is due today.
+  const showsAll = filter.markedOnly || filter.wrongOnly
   const queue = useMemo(
-    () => orderStudyQueue(inScope, queueReviewState, mode),
-    [inScope, queueReviewState, mode],
+    () => orderStudyQueue(inScope, queueReviewState, showsAll ? 'all' : mode),
+    [inScope, queueReviewState, mode, showsAll],
   )
   const dueCount = useMemo(
     () => inScope.filter((question) => isDueForReview(reviewState[question.id])).length,
@@ -58,6 +64,7 @@ export function StudyListPage() {
   function rebuild(patch: { mode?: SessionMode; filter?: Partial<StudyFilter> }) {
     setQueueReviewState(reviewState)
     setQueueStats(stats)
+    setQueueMarkedIds(new Set(markedIds))
     if (patch.mode) setMode(patch.mode)
     if (patch.filter) setFilter((current) => ({ ...current, ...patch.filter }))
     setRequestedPage(1)
@@ -128,6 +135,37 @@ export function StudyListPage() {
               onChange={(e) => rebuild({ filter: { query: e.target.value } })}
             />
           </div>
+          <div className="flex flex-wrap gap-4 text-sm">
+            <label className="flex min-h-10 items-center gap-1.5 md:min-h-0">
+              <input
+                type="checkbox"
+                checked={filter.markedOnly}
+                onChange={(e) => rebuild({ filter: { markedOnly: e.target.checked } })}
+              />
+              마킹만
+            </label>
+            <label className="flex min-h-10 items-center gap-1.5 md:min-h-0">
+              <input
+                type="checkbox"
+                checked={filter.wrongOnly}
+                onChange={(e) => rebuild({ filter: { wrongOnly: e.target.checked } })}
+              />
+              틀린 적 있는 문제만
+            </label>
+            <label className="flex min-h-10 items-center gap-1.5 md:min-h-0">
+              <input
+                type="checkbox"
+                checked={filter.attempted === 'unattempted'}
+                onChange={(e) => rebuild({ filter: { attempted: e.target.checked ? 'unattempted' : 'all' } })}
+              />
+              안 풀어본 문제만
+            </label>
+          </div>
+          {showsAll && (
+            <p className="text-xs text-muted-foreground">
+              마킹·오답 필터를 켜면 복습 일정과 관계없이 조건에 맞는 문제를 모두 보여 줍니다.
+            </p>
+          )}
         </CardContent>
       </Card>
 
